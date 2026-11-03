@@ -16,7 +16,7 @@ const TEXTS = {
     step2Title: "Answer as the owner.",
     step2Text: "The question lands in the owner inbox. Your answer goes to the customer, in their language.",
     step3Title: "Tap Save, then ask again.",
-    step3Text: "Start a new chat (in English or Arabic) and it answers on its own, citing what you taught it.",
+    step3Text: "Start a new chat (in any language) and it answers on its own, citing what you taught it.",
     privateNote: "This demo shop is yours alone: nobody else sees your chats or what you teach it. It resets after a day.",
     customer: "Customer",
     owner: "Owner",
@@ -25,6 +25,25 @@ const TEXTS = {
     loading: "Opening your demo shop…",
     failed: "Your demo couldn't open right now.",
     confirmStartOver: "Start over with a fresh demo shop? Your chats and what you taught it will be gone.",
+  },
+  el: {
+    startOver: "Από την αρχή",
+    title: "Είσαι και στις δύο πλευρές του πάγκου: ο πελάτης και ο ιδιοκτήτης.",
+    step1Title: "Ρώτα ως πελάτης.",
+    step1Text: "Οι τιμές απαντώνται αμέσως. Μετά ρώτα κάτι που το μαγαζί δεν του έχει πει ποτέ, όπως",
+    example: "Είστε ανοιχτά ανήμερα των Χριστουγέννων;",
+    step2Title: "Απάντησε ως ιδιοκτήτης.",
+    step2Text: "Η ερώτηση φτάνει στα εισερχόμενα του ιδιοκτήτη. Η απάντησή σου πάει στον πελάτη, στη γλώσσα του.",
+    step3Title: "Πάτα Αποθήκευση και ρώτα ξανά.",
+    step3Text: "Ξεκίνα νέα συνομιλία (σε όποια γλώσσα θέλεις) και θα απαντήσει μόνο του, με βάση όσα του έμαθες.",
+    privateNote: "Αυτό το δοκιμαστικό μαγαζί είναι μόνο δικό σου: κανείς άλλος δεν βλέπει τις συνομιλίες σου ή όσα του μαθαίνεις. Μηδενίζεται μετά από μία μέρα.",
+    customer: "Πελάτης",
+    owner: "Ιδιοκτήτης",
+    customerLabel: "Πελάτης · η συνομιλία στην ιστοσελίδα του μαγαζιού",
+    ownerLabel: "Ιδιοκτήτης · τα εισερχόμενά σου",
+    loading: "Ανοίγει το δοκιμαστικό σου μαγαζί…",
+    failed: "Δεν ήταν δυνατό να ανοίξει το demo αυτή τη στιγμή.",
+    confirmStartOver: "Να ξεκινήσεις από την αρχή με νέο δοκιμαστικό μαγαζί; Οι συνομιλίες σου και όσα του έμαθες θα χαθούν.",
   },
   ar: {
     startOver: "ابدأ من جديد",
@@ -35,7 +54,7 @@ const TEXTS = {
     step2Title: "أجب كصاحب المحل.",
     step2Text: "يصل السؤال إلى صندوق صاحب المحل. وجوابك يصل إلى الزبون بلغته.",
     step3Title: "اضغط حفظ، ثم اسأل مجدداً.",
-    step3Text: "ابدأ محادثة جديدة (بالعربية أو الإنجليزية) وسيجيب وحده، مستشهداً بما علّمته.",
+    step3Text: "ابدأ محادثة جديدة (بأي لغة) وسيجيب وحده، مستشهداً بما علّمته.",
     privateNote: "هذا المحل التجريبي لك وحدك: لا أحد غيرك يرى محادثاتك أو ما علّمته. يُعاد ضبطه بعد يوم.",
     customer: "الزبون",
     owner: "صاحب المحل",
@@ -55,7 +74,8 @@ function save(key, value) {
   catch { memory[key] = value; }
 }
 
-let lang = load(LANG_KEY) === "ar" ? "ar" : "en";
+const UI_LANGS = ["en", "el", "ar"]; // the page labels exist in these
+let lang = UI_LANGS.includes(load(LANG_KEY)) ? load(LANG_KEY) : "en";
 let box = null; // {slug, owner_key, chat_url, owner_url}
 let badgeTimer = null;
 const t = (key) => TEXTS[lang][key] ?? TEXTS.en[key];

@@ -169,7 +169,7 @@ SEED_BUSINESSES = [
         "demo": True,  # the owner page offers "Reset demo" (back to this KB, no chats)
         "suggestions": [
             "How much for 100 black & white pages?",
-            "كم سعر طباعة ٥٠ صفحة ملونة؟",
+            "Πόσο κοστίζει η εκτύπωση 50 έγχρωμων σελίδων;",
             "هل أنتم مفتوحون يوم عيد الميلاد؟",
             "My prints came out in the wrong order!",
             "ana talib, fi discount?",

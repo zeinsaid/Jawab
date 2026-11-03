@@ -3,9 +3,9 @@ business: The Plug Mini Market and Print Shop
 location: Asomatou 9, Egkomi, Lefkosia 2414, Cyprus
 currency: EUR
 default_language: en
-fallback_reply: Let me check with the team and get back to you. / دعني أتحقق من الفريق وأعود إليك.
+fallback_reply: Let me check with the team and get back to you. / Θα ελέγξω με την ομάδα και θα σας απαντήσω. / دعني أتحقق من الفريق وأعود إليك.
 last_reviewed: 2026-10-30
-languages: en, ar
+languages: en, el, ar
 ---
 
 # The Plug: Knowledge Base

@@ -127,3 +127,12 @@ def test_a_sqlite_file_database_works(tmp_path):
     client = TestClient(create_app(engine, ScriptedClient([])))
     assert client.post("/api/sandbox").status_code == 200
     assert client.get("/api/b/the-plug/public").status_code == 200
+
+
+def test_the_demo_shop_offers_english_greek_and_arabic():
+    client, _ = make()
+    box = client.post("/api/sandbox").json()
+    for slug in ("the-plug", box["slug"]):
+        info = client.get(f"/api/b/{slug}/public").json()
+        assert info["languages"] == ["en", "el", "ar"]
+        assert any("Πόσο" in s for s in info["suggestions"])

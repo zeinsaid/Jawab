@@ -208,7 +208,8 @@ def create_app(engine: Engine, client: LLMClient, limiter: RateLimiter | None = 
     def public_info(slug: str) -> dict:
         with session_factory() as session:
             business = business_or_404(session, slug)
-            return {"name": business.name, "suggestions": list(business.suggestions or [])}
+            return {"name": business.name, "suggestions": list(business.suggestions or []),
+                    "languages": brains.get_brain(business).kb.languages}
 
     @app.get("/api/public-stats/{slug}")
     def public_stats(slug: str) -> dict:

@@ -271,12 +271,13 @@ def _published(session: Session, row: OnboardingSession) -> Published:
     return Published(business.slug, business.owner_key)
 
 
-DEFAULT_LANGUAGES = "en, ar"  # Jawab serves its customers in English and Arabic (and Arabizi)
+DEFAULT_LANGUAGES = "en, el, ar"  # the languages Jawab's pages and the engine's language notes cover
 
 
 def with_default_languages(kb_markdown: str) -> str:
-    """Add `languages: en, ar` to the front matter if the KB doesn't list its languages, so the
-    engine's Arabic notes (dialects, Arabizi) are on for every business set up through /start."""
+    """Add `languages: en, el, ar` to the front matter if the KB doesn't list its languages, so the
+    engine's language notes (Arabizi, Greeklish) and the chat page's language toggle are on for every
+    business set up through /start."""
     lines = kb_markdown.split("\n")
     if not lines or lines[0].strip() != "---":
         return kb_markdown

@@ -272,7 +272,7 @@ def test_publish_creates_the_business_and_a_repeat_returns_the_same_links(make):
     with sessions() as session:
         business = session.scalar(select(Business).where(Business.slug == "noor-tailoring"))
         assert business.name == "Noor Tailoring" and business.kb_version == 1
-        assert business.kb_markdown == onboarding.with_default_languages(KB)  # plus languages: en, ar
+        assert business.kb_markdown == onboarding.with_default_languages(KB)  # plus languages: en, el, ar
         assert len(business.owner_key) == 24 and links["owner_url"].endswith(business.owner_key)
         assert business.suggestions[0] == "How much to shorten trousers?" and len(business.suggestions) == 4
         changes = session.scalars(select(KBChange).where(KBChange.business_id == business.id)).all()
@@ -299,7 +299,8 @@ def test_slugs_are_unique_and_starter_questions_fall_back_to_none(make):
     assert links["slug"] == "noor-tailoring-2"
     with sessions() as session:
         assert session.scalar(select(Business).where(Business.slug == "noor-tailoring-2")).suggestions == []
-    assert client.get("/api/b/noor-tailoring-2/public").json() == {"name": "Noor Tailoring", "suggestions": []}
+    assert client.get("/api/b/noor-tailoring-2/public").json() == {"name": "Noor Tailoring", "suggestions": [],
+                                                                   "languages": ["en", "el", "ar"]}
 
 
 def test_the_slug_follows_the_typed_name(make):
@@ -374,7 +375,7 @@ def test_published_kbs_get_jawabs_languages_unless_they_say():
     from brain.kb import parse_kb
 
     plain = "---\nbusiness: Test\ncurrency: EUR\n---\n\n### hello\n**Visibility:** public · **Status:** confirmed\n\nHi.\n"
-    assert parse_kb(with_default_languages(plain)).languages == ["en", "ar"]
+    assert parse_kb(with_default_languages(plain)).languages == ["en", "el", "ar"]
     greek = plain.replace("currency: EUR", "languages: en, el")
     assert with_default_languages(greek) == greek
     assert with_default_languages("no front matter\n") == "no front matter\n"

@@ -1,6 +1,6 @@
 # Jawab · جواب
 
-An AI receptionist for small businesses that **never guesses**. It answers customers in Arabic, English or Arabizi from the owner's own information. When it doesn't know, it **asks the owner**, passes the answer on to the customer in their language, and **learns it with one tap**. A new business sets itself up in a few minutes by pasting its price list.
+An AI receptionist for small businesses that **never guesses**. It answers customers in their own language (tested in English, Greek and Arabic, including Greek and Arabic typed in Latin letters) from the owner's own information. When it doesn't know, it **asks the owner**, passes the answer on to the customer in their language, and **learns it with one tap**. A new business sets itself up in a few minutes by pasting its price list.
 
 **[Try it: be the customer and the owner →](https://jawab-fb4z.onrender.com/try)** You get your own private copy of a real print shop. Ask it "Are you open on Christmas Day?", answer as the owner in the inbox next to the chat, tap Save, start a new chat and ask again.
 
@@ -16,7 +16,7 @@ Built in one day (31 Oct 2026) at the **Founding MENA x Replit Hackathon** in Du
 
 | For | What they get |
 |---|---|
-| **Customers** | A chat on the shop's website (a one-line script tag adds a chat bubble) that answers prices, hours and services in their language, and cites the shop's own information. |
+| **Customers** | A chat on the shop's website (a one-line script tag adds a chat bubble) that answers prices, hours and services in their language, and cites the shop's own information. The page itself comes in English, Greek or Arabic (right to left), as the business chooses. |
 | **The owner** | An inbox of the questions the bot couldn't answer and the chats it handed to a person. Each answer goes to the customer, rewritten in their language, and comes with a draft knowledge entry: **Save**, **Edit** or **Just this once**. |
 | **A new business** | `/start`: paste a price list, menu or website text, answer a few short questions, review the drafted knowledge base and publish. The bot is live straight away. |
 
@@ -59,7 +59,7 @@ from brain.learn import Learner      # owner's answer -> reply for the customer 
 from onboarding.interview import Interview
 ```
 
-Building Jawab improved the engine, and those changes went back into it: Arabic and Arabizi support, "learned entries win over ask-the-owner rules", the learning call, a quick five-minute interview, and language notes that switch on per business (a Greek shop gets the Greeklish notes, an Arabic one the Arabizi notes).
+Building Jawab improved the engine, and those changes went back into it: Arabic support, "learned entries win over ask-the-owner rules", the learning call, a quick five-minute interview, and language notes that switch on per business (a Greek shop gets the Greeklish notes, an Arabic one the Arabizi notes).
 
 ## How it was built
 
@@ -85,7 +85,7 @@ Copy `.env.example` to `.env` for the settings: `OPENAI_API_KEY`, and optionally
 
 | Page | What it is |
 |---|---|
-| `/` | Landing page (English / Arabic) |
+| `/` | Landing page (English / Greek / Arabic) |
 | `/try` | The public demo: your own sandbox, customer chat and owner inbox side by side |
 | `/b/{slug}` | A business's customer chat (`?panel=1` adds the "Behind the reply" panel) |
 | `/owner/{slug}?key=...` | The owner's inbox, knowledge and share links |

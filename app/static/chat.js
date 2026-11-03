@@ -15,15 +15,26 @@ if (EMBEDDED) {
   compactHeader();
 }
 
-// The bubble's small header: "New chat" becomes an icon, and a × asks embed.js to close the panel.
-function compactHeader() {
-  const svg = (path) => `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">` +
+// Phones: "New chat" becomes an icon, so the header keeps room for the name and three languages.
+if (!EMBEDDED && window.matchMedia("(max-width: 480px)").matches) iconNewChat();
+
+function svgIcon(path) {
+  return `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">` +
     `<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="${path}"/></svg>`;
+}
+
+function iconNewChat() {
   const newChat = document.getElementById("new-chat");
   newChat.removeAttribute("data-i18n");
   newChat.dataset.i18nAriaLabel = newChat.dataset.i18nTitle = "newChat";
   newChat.classList.add("icon-button");
-  newChat.innerHTML = svg("M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z");
+  newChat.innerHTML = svgIcon("M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z");
+}
+
+// The bubble's small header: "New chat" becomes an icon, and a × asks embed.js to close the panel.
+function compactHeader() {
+  const svg = svgIcon;
+  iconNewChat();
   const close = document.createElement("button");
   close.type = "button";
   close.id = "embed-close";
@@ -50,7 +61,7 @@ const LABELS = {
     inputAria: "Your message",
     send: "Send",
     suggestionsAria: "Suggested questions",
-    welcome: "Hi! I'm the assistant for {name}. Ask me about prices, opening hours or services, in English or Arabic.",
+    welcome: "Hi! I'm the assistant for {name}. Ask me about prices, opening hours or services, in your own language.",
     typing: "The assistant is typing",
     sentToOwner: "Sent to the owner",
     ownerReplied: "✓ The owner replied",
@@ -87,6 +98,51 @@ const LABELS = {
         "large order), so the assistant hands the chat to the team." },
     },
   },
+  el: {
+    subtitle: "AI ρεσεψιονίστ",
+    newChat: "Νέα συνομιλία",
+    closeChat: "Κλείσιμο συνομιλίας",
+    placeholder: "Γράψε ένα μήνυμα…",
+    inputAria: "Το μήνυμά σου",
+    send: "Αποστολή",
+    suggestionsAria: "Προτεινόμενες ερωτήσεις",
+    welcome: "Γεια σου! Είμαι ο βοηθός του {name}. Ρώτα με για τιμές, ωράριο ή υπηρεσίες, σε όποια γλώσσα θέλεις.",
+    typing: "Ο βοηθός γράφει",
+    sentToOwner: "Στάλθηκε στον ιδιοκτήτη",
+    ownerReplied: "✓ Ο ιδιοκτήτης απάντησε",
+    relayedLabel: "Από τον ιδιοκτήτη, μέσω Jawab",
+    handedOff: "Ένα μέλος της ομάδας θα συνεχίσει από εδώ.",
+    sentToTeam: "Στάλθηκε στην ομάδα. Ένα μέλος της ομάδας θα απαντήσει εδώ.",
+    team: "Ομάδα",
+    why: "Γιατί αυτή η απάντηση;",
+    errorGeneric: "Κάτι πήγε στραβά. Δοκίμασε ξανά.",
+    errorNetwork: "Δεν ήταν δυνατή η σύνδεση με τον βοηθό. Έλεγξε τη σύνδεσή σου και δοκίμασε ξανά.",
+    notFound: "Αυτή η συνομιλία δεν είναι διαθέσιμη.",
+    footer: "Οι απαντήσεις βγαίνουν μόνο από τις πληροφορίες του {name}. Όταν δεν είναι σίγουρος, ρωτάει την ομάδα.",
+    close: "Κλείσιμο",
+    panelTitle: "Πίσω από την απάντηση",
+    panelIntro: "Κάθε μήνυμα παίρνει ακριβώς μία ενέργεια:",
+    legend: {
+      answer: "από τις πληροφορίες της επιχείρησης, με αναφορά σε όσα χρησιμοποίησε.",
+      ask_owner: "όταν οι πληροφορίες δεν το καλύπτουν. Ρωτάει αντί να μαντεύει.",
+      handoff: "σε άνθρωπο, για παράπονα, επιστροφές χρημάτων και μεγάλες παραγγελίες.",
+    },
+    panelHint: "Στείλε ένα μήνυμα και δες εδώ γιατί ο βοηθός απάντησε έτσι.",
+    knowledgeUsed: "Γνώση που χρησιμοποιήθηκε",
+    noSources: "Καμία δημόσια καταχώριση.",
+    questionForOwner: "Ερώτηση προς τον ιδιοκτήτη (στα αγγλικά)",
+    internalRules: (n) => `Ακολούθησε επίσης ${n} ${n > 1 ? "εσωτερικούς κανόνες" : "εσωτερικό κανόνα"}: ` +
+      "τις ιδιωτικές πολιτικές της επιχείρησης, που καθοδηγούν τον βοηθό αλλά δεν εμφανίζονται ποτέ στις απαντήσεις. Μένουν κρυφές.",
+    learned: "✦ Το έμαθε",
+    actions: {
+      answer: { label: "Απάντηση", explain: "Απάντηση από τις πληροφορίες της επιχείρησης. Κάθε απάντηση πρέπει να " +
+        "στηρίζεται σε τουλάχιστον μία δημόσια καταχώριση· αλλιώς ο κώδικας τη μετατρέπει σε ερώτηση προς τον ιδιοκτήτη." },
+      ask_owner: { label: "Ρωτά τον ιδιοκτήτη", explain: "Οι πληροφορίες δεν το καλύπτουν, ή κάποιος κανόνας λέει να " +
+        "γίνει πρώτα έλεγχος. Αντί να μαντέψει, ο βοηθός ρωτά τον ιδιοκτήτη και λέει στον πελάτη ότι θα επανέλθει." },
+      handoff: { label: "Σε άνθρωπο", explain: "Αυτό χρειάζεται άνθρωπο (παράπονο, επιστροφή χρημάτων, διαπραγμάτευση ή " +
+        "μεγάλη παραγγελία), οπότε ο βοηθός δίνει τη συνομιλία στην ομάδα." },
+    },
+  },
   ar: {
     subtitle: "موظف استقبال ذكي",
     newChat: "محادثة جديدة",
@@ -95,7 +151,7 @@ const LABELS = {
     inputAria: "رسالتك",
     send: "إرسال",
     suggestionsAria: "أسئلة مقترحة",
-    welcome: "مرحباً! أنا مساعد {name}. اسألني عن الأسعار أو مواعيد العمل أو الخدمات، بالعربية أو الإنجليزية.",
+    welcome: "مرحباً! أنا مساعد {name}. اسألني عن الأسعار أو مواعيد العمل أو الخدمات، بأي لغة تريدها.",
     typing: "المساعد يكتب",
     sentToOwner: "أُرسل السؤال إلى المالك",
     ownerReplied: "✓ ردّ صاحب المتجر",
@@ -149,7 +205,8 @@ function save(key, value) {
 
 // --- State ----------------------------------------------------------------------------------------
 
-let lang = load(LANG_KEY) === "ar" ? "ar" : "en";
+const UI_LANGS = ["en", "el", "ar"]; // the page labels exist in these
+let lang = UI_LANGS.includes(load(LANG_KEY)) ? load(LANG_KEY) : "en";
 let business = { name: "", suggestions: [] };
 let conversationId = load(CONVERSATION_KEY);
 let conversationState = "bot_active";
@@ -590,7 +647,19 @@ async function loadBusiness() {
   document.title = business.name;
   document.getElementById("business-name").textContent = business.name;
   document.getElementById("avatar").textContent = (business.name.trim()[0] || "?").toUpperCase();
+  applyBusinessLanguages();
   renderSuggestions();
+}
+
+// A business shows the page in its own languages (its knowledge base's `languages:` line), as far
+// as the page has labels for them. The bot itself still replies in whatever language a customer writes.
+function applyBusinessLanguages() {
+  const offered = (business.languages || []).filter((code) => UI_LANGS.includes(code));
+  const languages = offered.length ? offered : ["en"];
+  document.querySelectorAll(".lang").forEach((button) => { button.hidden = !languages.includes(button.dataset.lang); });
+  const toggle = document.querySelector(".lang-toggle");
+  if (toggle) toggle.hidden = languages.length < 2;
+  if (!languages.includes(lang)) lang = languages.includes("en") ? "en" : languages[0];
 }
 
 // --- Wiring ---------------------------------------------------------------------------------------
