@@ -2,7 +2,7 @@
 
 An AI receptionist for small businesses that **never guesses**. It answers customers in Arabic, English or Arabizi from the owner's own information. When it doesn't know, it **asks the owner**, passes the answer on to the customer in their language, and **learns it with one tap**. A new business sets itself up in a few minutes by pasting its price list.
 
-**[Try it: be the customer and the owner →](https://jawab.onrender.com/try)** You get your own private copy of a real print shop. Ask it "Are you open on Christmas Day?", answer as the owner in the inbox next to the chat, tap Save, start a new chat and ask again.
+**[Try it: be the customer and the owner →](https://jawab-fb4z.onrender.com/try)** You get your own private copy of a real print shop. Ask it "Are you open on Christmas Day?", answer as the owner in the inbox next to the chat, tap Save, start a new chat and ask again.
 
 <sub>The demo runs on free hosting that sleeps when nobody's using it, so the first visit can take about a minute to wake up. Your demo shop is private to you and resets after a day.</sub>
 
@@ -90,7 +90,7 @@ Copy `.env.example` to `.env` for the settings: `OPENAI_API_KEY`, and optionally
 | `/b/{slug}` | A business's customer chat (`?panel=1` adds the "Behind the reply" panel) |
 | `/owner/{slug}?key=...` | The owner's inbox, knowledge and share links |
 | `/start` | Onboarding a new business |
-| `/embed.js?b={slug}` | The website chat bubble, e.g. on [a demo shop site](https://jawab.onrender.com/demo/the-plug) |
+| `/embed.js?b={slug}` | The website chat bubble, e.g. on [a demo shop site](https://jawab-fb4z.onrender.com/demo/the-plug) |
 
 ## Repository layout
 

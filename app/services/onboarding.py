@@ -271,6 +271,21 @@ def _published(session: Session, row: OnboardingSession) -> Published:
     return Published(business.slug, business.owner_key)
 
 
+DEFAULT_LANGUAGES = "en, ar"  # Jawab serves its customers in English and Arabic (and Arabizi)
+
+
+def with_default_languages(kb_markdown: str) -> str:
+    """Add `languages: en, ar` to the front matter if the KB doesn't list its languages, so the
+    engine's Arabic notes (dialects, Arabizi) are on for every business set up through /start."""
+    lines = kb_markdown.split("\n")
+    if not lines or lines[0].strip() != "---":
+        return kb_markdown
+    end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
+    if end is None or any(line.startswith("languages:") for line in lines[1:end]):
+        return kb_markdown
+    return "\n".join(lines[:end] + [f"languages: {DEFAULT_LANGUAGES}"] + lines[end:])
+
+
 def publish(session_factory: sessionmaker[Session], client: LLMClient, session_id: uuid.UUID,
             kb_markdown: str) -> Published:
     """Create the business from a reviewed KB. Publishing again returns the same business."""
@@ -282,6 +297,7 @@ def publish(session_factory: sessionmaker[Session], client: LLMClient, session_i
     problems = check_kb(kb_markdown)
     if problems:
         raise InvalidKB(problems)
+    kb_markdown = with_default_languages(kb_markdown)
     kb = parse_kb(kb_markdown)
     name = kb.metadata.get("business") or business_name
     # The slug follows the name the owner typed ("Noor Tailoring" -> noor-tailoring), which is often
