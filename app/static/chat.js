@@ -1,0 +1,650 @@
+// The customer chat page: /b/{slug}, with the "Behind the reply" panel only when ?panel=1.
+// The server keeps the conversation; the page only remembers its ID (spec section 6).
+
+const SLUG = decodeURIComponent(location.pathname.split("/")[2] || "");
+const API = `/api/b/${encodeURIComponent(SLUG)}`;
+const SHOW_PANEL = new URLSearchParams(location.search).get("panel") === "1";
+// ?embed=1: inside the website bubble (embed.js), where the Jawab header bar isn't wanted.
+const EMBEDDED = new URLSearchParams(location.search).get("embed") === "1";
+// ?frame=1: inside the /try page, which has its own Jawab bar.
+const FRAMED = new URLSearchParams(location.search).get("frame") === "1";
+if (FRAMED) document.querySelector(".brandbar")?.remove();
+if (EMBEDDED) {
+  document.querySelector(".brandbar")?.remove();
+  document.querySelector(".layout")?.classList.add("embedded");
+  compactHeader();
+}
+
+// The bubble's small header: "New chat" becomes an icon, and a × asks embed.js to close the panel.
+function compactHeader() {
+  const svg = (path) => `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">` +
+    `<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="${path}"/></svg>`;
+  const newChat = document.getElementById("new-chat");
+  newChat.removeAttribute("data-i18n");
+  newChat.dataset.i18nAriaLabel = newChat.dataset.i18nTitle = "newChat";
+  newChat.classList.add("icon-button");
+  newChat.innerHTML = svg("M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z");
+  const close = document.createElement("button");
+  close.type = "button";
+  close.id = "embed-close";
+  close.className = "ghost-button icon-button";
+  close.dataset.i18nAriaLabel = close.dataset.i18nTitle = "closeChat";
+  close.innerHTML = svg("M6 6l12 12M18 6L6 18");
+  close.addEventListener("click", () => window.parent.postMessage({ type: "jawab:close" }, "*"));
+  document.querySelector(".header-actions").append(close);
+}
+const CONVERSATION_KEY = `jawab:${SLUG}:conversation`;
+const LANG_KEY = "jawab:lang";
+const POLL_MS = 3000;
+const WAITING_STATES = ["waiting_on_owner", "human_handoff"];
+const ARABIC = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/;
+
+// --- The page's own labels (not the bot's replies) ---------------------------------------------
+
+const LABELS = {
+  en: {
+    subtitle: "AI receptionist",
+    newChat: "New chat",
+    closeChat: "Close chat",
+    placeholder: "Type a message…",
+    inputAria: "Your message",
+    send: "Send",
+    suggestionsAria: "Suggested questions",
+    welcome: "Hi! I'm the assistant for {name}. Ask me about prices, opening hours or services, in English or Arabic.",
+    typing: "The assistant is typing",
+    sentToOwner: "Sent to the owner",
+    ownerReplied: "✓ The owner replied",
+    relayedLabel: "From the owner, via Jawab",
+    handedOff: "A team member will take it from here.",
+    sentToTeam: "Sent to the team. A team member will reply here.",
+    team: "Team",
+    why: "Why this reply?",
+    errorGeneric: "Something went wrong. Please try again.",
+    errorNetwork: "Couldn't reach the assistant. Check your connection and try again.",
+    notFound: "This chat isn't available.",
+    footer: "Answers come only from {name}'s own information. When it isn't sure, it asks the team.",
+    close: "Close",
+    panelTitle: "Behind the reply",
+    panelIntro: "Every message gets exactly one action:",
+    legend: {
+      answer: "from the business's information, citing what it used.",
+      ask_owner: "when the information doesn't cover it. It asks instead of guessing.",
+      handoff: "to a person for complaints, refunds and big orders.",
+    },
+    panelHint: "Send a message, then see here why the assistant replied the way it did.",
+    knowledgeUsed: "Knowledge used",
+    noSources: "No public entries.",
+    questionForOwner: "Question sent to the owner (in English)",
+    internalRules: (n) => `Also followed ${n} internal rule${n > 1 ? "s" : ""}: the business's private policies, ` +
+      "which guide the assistant but never appear in replies. They stay hidden.",
+    learned: "✦ Learned",
+    actions: {
+      answer: { label: "Answer", explain: "Answered from the business's information. Every answer must cite at " +
+        "least one public entry; if it can't, the code turns it into a question for the owner instead." },
+      ask_owner: { label: "Ask owner", explain: "The information doesn't cover this, or a rule says to check " +
+        "first. Instead of guessing, the assistant asks the owner and tells the customer it will get back to them." },
+      handoff: { label: "Hand off", explain: "This needs a person (a complaint, a refund, a negotiation or a " +
+        "large order), so the assistant hands the chat to the team." },
+    },
+  },
+  ar: {
+    subtitle: "موظف استقبال ذكي",
+    newChat: "محادثة جديدة",
+    closeChat: "إغلاق",
+    placeholder: "اكتب رسالتك…",
+    inputAria: "رسالتك",
+    send: "إرسال",
+    suggestionsAria: "أسئلة مقترحة",
+    welcome: "مرحباً! أنا مساعد {name}. اسألني عن الأسعار أو مواعيد العمل أو الخدمات، بالعربية أو الإنجليزية.",
+    typing: "المساعد يكتب",
+    sentToOwner: "أُرسل السؤال إلى المالك",
+    ownerReplied: "✓ ردّ صاحب المتجر",
+    relayedLabel: "من صاحب المتجر، عبر جواب",
+    handedOff: "سيتابع معك أحد أعضاء الفريق من هنا.",
+    sentToTeam: "وصلت رسالتك إلى الفريق، وسيرد عليك أحدهم هنا.",
+    team: "الفريق",
+    why: "لماذا هذا الرد؟",
+    errorGeneric: "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
+    errorNetwork: "تعذّر الوصول إلى المساعد. تحقّق من اتصالك وحاول مرة أخرى.",
+    notFound: "هذه المحادثة غير متاحة.",
+    footer: "الإجابات مأخوذة فقط من معلومات {name}. وعندما لا يكون متأكداً، يسأل الفريق.",
+    close: "إغلاق",
+    panelTitle: "خلف الرد",
+    panelIntro: "كل رسالة تحصل على إجراء واحد فقط:",
+    legend: {
+      answer: "من معلومات النشاط التجاري، مع ذكر ما استند إليه.",
+      ask_owner: "عندما لا تغطي المعلومات السؤال. يسأل بدلاً من التخمين.",
+      handoff: "إلى شخص من الفريق للشكاوى والاسترداد والطلبات الكبيرة.",
+    },
+    panelHint: "أرسل رسالة، ثم شاهد هنا لماذا ردّ المساعد بهذه الطريقة.",
+    knowledgeUsed: "المعلومات المستخدمة",
+    noSources: "لا توجد معلومات عامة.",
+    questionForOwner: "السؤال المرسل إلى المالك (بالإنجليزية)",
+    internalRules: (n) => `اتّبع أيضاً ${n} من القواعد الداخلية: سياسات خاصة توجّه المساعد ولا تظهر أبداً في الردود، وتبقى مخفية.`,
+    learned: "✦ مُتعلَّمة",
+    actions: {
+      answer: { label: "إجابة", explain: "إجابة من معلومات النشاط التجاري. يجب أن تستند كل إجابة إلى معلومة عامة " +
+        "واحدة على الأقل؛ وإلا يحوّلها النظام إلى سؤال للمالك." },
+      ask_owner: { label: "سؤال المالك", explain: "المعلومات لا تغطي هذا السؤال، أو هناك قاعدة تطلب التحقق أولاً. " +
+        "بدلاً من التخمين، يسأل المساعد المالك ويخبر العميل بأنه سيعود إليه." },
+      handoff: { label: "تحويل لشخص", explain: "هذا يحتاج إلى شخص (شكوى أو استرداد أو تفاوض أو طلب كبير)، " +
+        "لذلك يحوّل المساعد المحادثة إلى الفريق." },
+    },
+  },
+};
+
+// --- Storage that never breaks the page (private mode, blocked cookies) -------------------------
+
+const memory = {};
+function load(key) {
+  try { return localStorage.getItem(key); } catch { return memory[key] ?? null; }
+}
+function save(key, value) {
+  try {
+    if (value === null) localStorage.removeItem(key); else localStorage.setItem(key, value);
+  } catch {
+    if (value === null) delete memory[key]; else memory[key] = value;
+  }
+}
+
+// --- State ----------------------------------------------------------------------------------------
+
+let lang = load(LANG_KEY) === "ar" ? "ar" : "en";
+let business = { name: "", suggestions: [] };
+let conversationId = load(CONVERSATION_KEY);
+let conversationState = "bot_active";
+let lastId = 0; // highest message ID shown, for polling
+const seen = new Set(); // message IDs already on the page
+const decisions = []; // bot replies that have panel data: {data, bubble}
+let selected = null;
+let busy = false;
+let pollTimer = null;
+let polling = false;
+let teamNoteShown = false;
+
+const messagesEl = document.getElementById("messages");
+const form = document.getElementById("composer");
+const input = document.getElementById("input");
+const sendButton = document.getElementById("send");
+const suggestionsEl = document.getElementById("suggestions");
+const panel = document.getElementById("panel");
+const panelBody = document.getElementById("panel-body");
+
+const t = (key) => LABELS[lang][key];
+const fill = (text) => text.replaceAll("{name}", business.name || "");
+
+// --- Small DOM helpers ----------------------------------------------------------------------------
+
+// el("p", {className: "x"}, "text", child): strings become text nodes, so nothing runs as HTML.
+function el(tag, props = {}, ...children) {
+  const node = Object.assign(document.createElement(tag), props);
+  node.append(...children.filter((c) => c !== null && c !== undefined && c !== false));
+  return node;
+}
+
+// Arabic text gets the Arabic font; dir="auto" handles the direction.
+function textNode(text, className = "text") {
+  const span = el("span", { className, textContent: text, dir: "auto" });
+  if (ARABIC.test(text)) span.classList.add("ar");
+  return span;
+}
+
+function scrollToEnd() {
+  messagesEl.lastElementChild?.scrollIntoView({ behavior: "smooth", block: "end" });
+}
+
+// --- Labels ---------------------------------------------------------------------------------------
+
+function applyLabels() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-i18n]").forEach((node) => (node.textContent = fill(t(node.dataset.i18n))));
+  document.querySelectorAll("[data-i18n-placeholder]").forEach((node) => (node.placeholder = t(node.dataset.i18nPlaceholder)));
+  document.querySelectorAll("[data-i18n-aria-label]").forEach((node) => node.setAttribute("aria-label", t(node.dataset.i18nAriaLabel)));
+  document.querySelectorAll("[data-i18n-title]").forEach((node) => (node.title = t(node.dataset.i18nTitle)));
+  document.querySelectorAll(".lang").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.lang === lang)));
+  document.getElementById("footer").textContent = business.name ? fill(t("footer")) : "";
+  document.querySelectorAll("[data-label]").forEach((node) => (node.textContent = fill(t(node.dataset.label))));
+  if (SHOW_PANEL) selected ? renderPanel(selected) : renderLegend();
+}
+
+// --- Messages -------------------------------------------------------------------------------------
+
+function addWelcome() {
+  const li = el("li", { className: "message bot welcome-message" });
+  const span = el("span", { className: "text", dir: "auto" });
+  span.dataset.label = "welcome";
+  span.textContent = fill(t("welcome"));
+  li.append(span);
+  messagesEl.append(li);
+}
+
+function addCustomer(text) {
+  messagesEl.append(el("li", { className: "message customer" }, textNode(text)));
+  scrollToEnd();
+}
+
+function addNote(labelOrText, { error = false, label = false, className = "" } = {}) {
+  const li = el("li", { className: `message note${error ? " error" : ""} ${className}`.trim(), dir: "auto" });
+  if (label) {
+    li.dataset.label = labelOrText;
+    li.textContent = t(labelOrText);
+  } else {
+    li.textContent = labelOrText;
+  }
+  messagesEl.append(li);
+  scrollToEnd();
+  return li;
+}
+
+function addTyping() {
+  const li = el("li", { className: "message bot typing" }, el("span"), el("span"), el("span"));
+  li.setAttribute("aria-label", t("typing"));
+  messagesEl.append(li);
+  scrollToEnd();
+  return li;
+}
+
+// A bot reply. `panelData` is only there for replies to this page's own messages.
+function addBot(message, panelData = null) {
+  if (seen.has(message.id)) return;
+  seen.add(message.id);
+  lastId = Math.max(lastId, message.id);
+  const bubble = el("li", { className: "message bot" });
+  if (message.relayed) {
+    // The owner's answer, passed on by the bot: say whose answer it is.
+    bubble.classList.add("relayed");
+    const label = el("span", { className: "relay-label", dir: "auto" });
+    label.dataset.label = "relayedLabel";
+    label.textContent = t("relayedLabel");
+    bubble.append(label);
+    markOwnerReplied();
+  }
+  bubble.append(textNode(message.text));
+  if (SHOW_PANEL && panelData) {
+    const entry = { data: panelData, bubble };
+    const why = el("button", { type: "button", className: "why", dir: "auto" });
+    why.dataset.label = "why";
+    why.textContent = t("why");
+    why.addEventListener("click", () => select(entry, { open: true }));
+    bubble.append(why);
+    decisions.push(entry);
+    messagesEl.append(bubble);
+    select(entry);
+  } else {
+    messagesEl.append(bubble);
+  }
+  scrollToEnd();
+}
+
+function addStaff(message) {
+  if (seen.has(message.id)) return;
+  seen.add(message.id);
+  lastId = Math.max(lastId, message.id);
+  const sender = el("span", { className: "sender", dir: "auto" });
+  sender.dataset.label = "team";
+  sender.textContent = t("team");
+  messagesEl.append(el("li", { className: "message staff" }, sender, textNode(message.text)));
+  markOwnerReplied(); // the owner's answer can also arrive as a Team message
+  scrollToEnd();
+}
+
+// "Sent to the owner" (an amber pill with a pulsing dot) becomes "✓ The owner replied".
+function addWaitingNote() {
+  addNote("sentToOwner", { label: true, className: "status-note waiting" });
+}
+
+function markOwnerReplied() {
+  messagesEl.querySelectorAll(".status-note.waiting, .status-note.asked").forEach((note) => {
+    note.classList.remove("waiting", "asked");
+    note.classList.add("replied");
+    note.dataset.label = "ownerReplied";
+    note.textContent = t("ownerReplied");
+  });
+}
+
+function addFromServer(message, { includeCustomer = false } = {}) {
+  if (message.role === "bot") addBot(message);
+  else if (message.role === "staff") addStaff(message);
+  else if (includeCustomer && !seen.has(message.id)) {
+    seen.add(message.id);
+    lastId = Math.max(lastId, message.id);
+    addCustomer(message.text);
+  } else {
+    lastId = Math.max(lastId, message.id); // our own message: already on the page
+  }
+}
+
+// --- The decision panel ---------------------------------------------------------------------------
+
+function select(entry, { open = false } = {}) {
+  selected = entry;
+  decisions.forEach((d) => d.bubble.classList.toggle("selected", d === entry));
+  renderPanel(entry);
+  if (open) panel.classList.add("open"); // only matters on phones, where the panel is a sheet
+}
+
+function renderLegend() {
+  const legend = t("legend");
+  const actions = t("actions");
+  panelBody.replaceChildren(
+    el("p", { textContent: t("panelIntro"), dir: "auto" }),
+    el("ul", { className: "actions-legend" },
+      ...["answer", "ask_owner", "handoff"].map((a) => el("li", { dir: "auto" },
+        el("span", { className: `badge badge-${a}`, textContent: actions[a].label }), " ", legend[a]))),
+    el("p", { className: "muted", textContent: t("panelHint"), dir: "auto" }));
+}
+
+function renderPanel(entry) {
+  const { data } = entry;
+  const action = t("actions")[data.action];
+  const parts = [
+    el("p", { className: "action-head" }, el("span", { className: `badge badge-lg badge-${data.action}`, textContent: action.label })),
+    el("p", { textContent: action.explain, dir: "auto" }),
+  ];
+  if (data.question_for_owner) {
+    parts.push(el("h3", { textContent: t("questionForOwner"), dir: "auto" }),
+      el("blockquote", { className: "owner-question", textContent: data.question_for_owner, dir: "auto" }));
+  }
+  parts.push(el("h3", { textContent: t("knowledgeUsed"), dir: "auto" }));
+  if (data.sources.length) {
+    for (const source of data.sources) {
+      const summary = el("summary", {}, el("code", { textContent: source.id }));
+      if (source.learned) summary.append(" ", el("span", { className: "badge badge-learned badge-md", textContent: t("learned") }));
+      // A learned source glows once, the first time this reply's panel shows it.
+      const glow = source.learned && !entry.glowShown ? " glow" : "";
+      parts.push(el("details", { className: `source${source.learned ? " learned" : ""}${glow}` }, summary, renderEntry(source.text)));
+    }
+  } else {
+    parts.push(el("p", { className: "muted", textContent: t("noSources"), dir: "auto" }));
+  }
+  if (data.internal_rules_used) {
+    parts.push(el("p", { className: "muted", textContent: t("internalRules")(data.internal_rules_used), dir: "auto" }));
+  }
+  panelBody.replaceChildren(...parts);
+  if (data.sources.some((s) => s.learned)) entry.glowShown = true;
+}
+
+// Entries use a little markdown: paragraphs, "- " lists, tables and **bold**. Still only text nodes.
+function lineKind(line) {
+  line = line.trim();
+  if (!line) return "blank";
+  if (line.startsWith("|")) return "table";
+  return /^[-*] /.test(line) ? "list" : "text";
+}
+
+function renderEntry(text) {
+  const box = el("div", { className: "entry" });
+  const lines = text.split("\n");
+  for (let i = 0; i < lines.length;) {
+    const kind = lineKind(lines[i]);
+    const group = [];
+    while (i < lines.length && lineKind(lines[i]) === kind) group.push(lines[i++].trim());
+    if (kind === "table") box.append(renderTable(group));
+    else if (kind === "list") box.append(el("ul", {}, ...group.map((l) => el("li", {}, ...inline(l.slice(2))))));
+    else if (kind === "text") box.append(el("p", {}, ...inline(group.join(" "))));
+  }
+  return box;
+}
+
+function renderTable(lines) {
+  let rows = lines
+    .filter((l) => !/^\|[\s:|-]+\|?$/.test(l))
+    .map((l) => l.replace(/^\||\|$/g, "").split("|").map((cell) => cell.trim()));
+  // Price ladders are one or two long rows; turned on their side they fit the narrow panel.
+  if (rows.length <= 3 && rows[0].length > 4) rows = rows[0].map((_, c) => rows.map((row) => row[c] ?? ""));
+  const [head, ...body] = rows;
+  return el("div", { className: "table-wrap" }, el("table", {},
+    el("thead", {}, el("tr", {}, ...head.map((cell) => el("th", { textContent: cell })))),
+    el("tbody", {}, ...body.map((row) => el("tr", {}, ...row.map((cell) => el("td", { textContent: cell })))))));
+}
+
+function inline(text) {
+  return text.replaceAll("`", "").split(/\*\*(.+?)\*\*/).map((part, i) => (i % 2 ? el("strong", { textContent: part }) : part));
+}
+
+// --- Talking to the server ------------------------------------------------------------------------
+
+function setBusy(value) {
+  busy = value;
+  input.disabled = busy;
+  sendButton.disabled = busy;
+  suggestionsEl.querySelectorAll(".chip").forEach((chip) => (chip.disabled = busy));
+  if (!busy) input.focus({ preventScroll: true });
+}
+
+function setConversation(id) {
+  conversationId = id;
+  save(CONVERSATION_KEY, id);
+}
+
+function setState(state) {
+  if (state !== "human_handoff") teamNoteShown = false;
+  if (state !== "waiting_on_owner") {
+    // No longer waiting (e.g. the owner sent nothing to the customer): the dot stops pulsing.
+    messagesEl.querySelectorAll(".status-note.waiting").forEach((note) => {
+      note.classList.remove("waiting");
+      note.classList.add("asked");
+    });
+  }
+  conversationState = state;
+  if (WAITING_STATES.includes(state)) startPolling(); else stopPolling();
+}
+
+async function readError(response) {
+  try {
+    const data = await response.json();
+    if (typeof data.detail === "string") return data.detail;
+  } catch { /* not JSON */ }
+  return t("errorGeneric");
+}
+
+async function send(text) {
+  text = text.trim();
+  if (!text || busy) return;
+  addCustomer(text);
+  input.value = "";
+  input.classList.remove("ar");
+  setBusy(true);
+  const typing = addTyping();
+
+  try {
+    const response = await fetch(`${API}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ conversation_id: conversationId, message: text }),
+    });
+    if (!response.ok) {
+      typing.remove();
+      addNote(await readError(response), { error: true });
+      return;
+    }
+    const data = await response.json();
+    typing.remove();
+    setConversation(data.conversation_id);
+
+    if (data.message) {
+      addBot(data.message, data.panel);
+      if (data.message.action === "ask_owner") addWaitingNote();
+      else if (data.message.action === "handoff") {
+        addNote("handedOff", { label: true, className: "status-note" });
+        teamNoteShown = true;
+      }
+    } else if (!teamNoteShown) {
+      // A person has taken over: the message went to the team, and the bot stays quiet.
+      addNote("sentToTeam", { label: true, className: "status-note" });
+      teamNoteShown = true;
+    }
+    setState(data.state);
+  } catch {
+    typing.remove();
+    addNote("errorNetwork", { error: true, label: true });
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function poll() {
+  if (polling || busy || !conversationId) return;
+  polling = true;
+  try {
+    const response = await fetch(`${API}/conversations/${conversationId}/messages?after=${lastId}`);
+    if (!response.ok) return;
+    const data = await response.json();
+    data.messages.forEach((m) => addFromServer(m));
+    setState(data.state);
+  } catch {
+    // Offline for a moment: try again on the next tick.
+  } finally {
+    polling = false;
+  }
+}
+
+function startPolling() {
+  if (!pollTimer) pollTimer = setInterval(poll, POLL_MS);
+}
+
+function stopPolling() {
+  clearInterval(pollTimer);
+  pollTimer = null;
+}
+
+// Reloading the page shows the same conversation, fetched from the server.
+async function restore() {
+  if (!conversationId) return;
+  try {
+    const response = await fetch(`${API}/conversations/${conversationId}/messages?after=0`);
+    if (response.status === 404 || response.status === 422) {
+      setConversation(null);
+      return;
+    }
+    if (!response.ok) return;
+    const data = await response.json();
+    data.messages.forEach((m) => addFromServer(m, { includeCustomer: true }));
+    // Still waiting on someone: say so again, since the notes aren't stored.
+    if (data.state === "waiting_on_owner") addWaitingNote();
+    if (data.state === "human_handoff") {
+      addNote("handedOff", { label: true, className: "status-note" });
+      teamNoteShown = true;
+    }
+    setState(data.state);
+  } catch { /* keep the ID; the next message continues the conversation */ }
+}
+
+function resetChat() {
+  stopPolling();
+  setConversation(null);
+  conversationState = "bot_active";
+  lastId = 0;
+  seen.clear();
+  decisions.length = 0;
+  selected = null;
+  teamNoteShown = false;
+  messagesEl.replaceChildren();
+  addWelcome();
+  if (SHOW_PANEL) renderLegend();
+  panel.classList.remove("open");
+  input.value = "";
+  setBusy(false);
+}
+
+function renderSuggestions() {
+  suggestionsEl.replaceChildren(...business.suggestions.map((text) => {
+    const chip = el("button", { type: "button", className: "chip", textContent: text, dir: "auto" });
+    if (ARABIC.test(text)) chip.classList.add("ar");
+    chip.title = text; // long chips end in "…" on phones
+    chip.addEventListener("click", () => send(text));
+    return chip;
+  }));
+  suggestionsEl.hidden = business.suggestions.length === 0;
+  fitChips();
+}
+
+// Phones and the bubble: chips wrap onto at most two rows; whole chips that don't fit are hidden
+// (never cut in half, and not reachable by Tab while invisible).
+const COMPACT_CHIPS = window.matchMedia("(max-width: 600px)");
+function fitChips() {
+  const chips = [...suggestionsEl.querySelectorAll(".chip")];
+  const compact = (EMBEDDED || COMPACT_CHIPS.matches) && !suggestionsEl.hidden;
+  chips.forEach((chip) => (chip.hidden = compact)); // then shown one by one below
+  if (!compact) return;
+  // In order, keep each chip that lands on the first two rows; a later, shorter chip can still
+  // fill a gap left by a long one that didn't fit.
+  const rows = [];
+  for (const chip of chips) {
+    chip.hidden = false;
+    // Relative to the row box: the box itself moves up as it grows (it sits above the input).
+    const top = Math.round(chip.getBoundingClientRect().top - suggestionsEl.getBoundingClientRect().top);
+    if (!rows.includes(top)) {
+      if (rows.length >= 2) { chip.hidden = true; continue; }
+      rows.push(top);
+    }
+  }
+}
+window.addEventListener("resize", fitChips);
+document.fonts?.ready.then(fitChips); // widths change once the web fonts arrive
+
+async function loadBusiness() {
+  const response = await fetch(`${API}/public`);
+  if (!response.ok) throw new Error("not found");
+  business = await response.json();
+  document.title = business.name;
+  document.getElementById("business-name").textContent = business.name;
+  document.getElementById("avatar").textContent = (business.name.trim()[0] || "?").toUpperCase();
+  renderSuggestions();
+}
+
+// --- Wiring ---------------------------------------------------------------------------------------
+
+form.addEventListener("submit", (event) => {
+  event.preventDefault();
+  send(input.value);
+});
+input.addEventListener("input", () => input.classList.toggle("ar", ARABIC.test(input.value)));
+document.getElementById("new-chat").addEventListener("click", resetChat);
+document.getElementById("panel-close").addEventListener("click", () => panel.classList.remove("open"));
+document.querySelectorAll(".lang").forEach((button) => button.addEventListener("click", () => {
+  lang = button.dataset.lang;
+  save(LANG_KEY, lang);
+  applyLabels();
+}));
+// Catch up straight away when the customer comes back to the tab.
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && WAITING_STATES.includes(conversationState)) poll();
+});
+
+// Phones: when the keyboard opens, shrink the page to the visible area so the input stays above
+// the keyboard (iOS Safari doesn't resize the page itself), and keep the latest message in view.
+function fitToVisibleArea() {
+  const viewport = window.visualViewport;
+  if (!viewport) return;
+  if (viewport.scale > 1.01) { // pinch-zoomed, not a keyboard: leave the page its normal height
+    document.documentElement.style.removeProperty("--app-height");
+    return;
+  }
+  document.documentElement.style.setProperty("--app-height", `${Math.round(viewport.height)}px`);
+  if (window.scrollY !== 0) window.scrollTo(0, 0);
+  if (document.activeElement?.id === "input") scrollToEnd();
+}
+window.visualViewport?.addEventListener("resize", fitToVisibleArea);
+fitToVisibleArea();
+
+async function init() {
+  if (SHOW_PANEL) {
+    panel.hidden = false;
+    document.getElementById("layout").classList.add("with-panel");
+  }
+  applyLabels();
+  setBusy(true);
+  try {
+    await loadBusiness();
+  } catch {
+    addNote("notFound", { error: true, label: true });
+    return;
+  }
+  addWelcome();
+  applyLabels();
+  await restore();
+  setBusy(false);
+}
+
+init();

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0F766E">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <title>Try Jawab · Be the customer and the owner</title>
+  <meta name="description" content="Chat with an AI receptionist as a customer, answer its questions as the owner, and watch it learn. Your own private demo.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Jawab">
+  <meta property="og:title" content="Try Jawab · Be the customer and the owner">
+  <meta property="og:description" content="Ask it something it doesn't know, answer as the owner, tap Save, and ask again.">
+  <meta name="twitter:card" content="summary">
+  <meta name="robots" content="noindex">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=IBM+Plex+Sans+Arabic:wght@400;600;700&display=swap">
+  <link rel="stylesheet" href="/static/landing.css">
+  <link rel="stylesheet" href="/static/try.css">
+</head>
+<body class="try-body">
+  <header class="topbar try-topbar">
+    <a class="wordmark" href="/"><span>Jawab</span><span class="wordmark-ar" lang="ar">جواب</span></a>
+    <div class="try-actions">
+      <button type="button" class="button secondary small" id="start-over" data-i18n="startOver"></button>
+      <div class="lang-toggle" role="group" aria-label="Language">
+        <button type="button" class="lang" data-lang="en" lang="en">EN</button>
+        <button type="button" class="lang" data-lang="ar" lang="ar">عربي</button>
+      </div>
+    </div>
+  </header>
+
+  <section class="try-intro" aria-labelledby="try-title">
+    <h1 id="try-title" data-i18n="title"></h1>
+    <ol class="try-steps">
+      <li><span class="step-n">1</span><span><strong data-i18n="step1Title"></strong> <span data-i18n="step1Text"></span>
+        <button type="button" class="example" id="example" dir="auto"></button></span></li>
+      <li><span class="step-n">2</span><span><strong data-i18n="step2Title"></strong> <span data-i18n="step2Text"></span></span></li>
+      <li><span class="step-n">3</span><span><strong data-i18n="step3Title"></strong> <span data-i18n="step3Text"></span></span></li>
+    </ol>
+    <p class="try-note" data-i18n="privateNote"></p>
+  </section>
+
+  <!-- Phones: one side at a time. -->
+  <nav class="side-tabs" role="tablist" aria-label="Sides">
+    <button type="button" role="tab" class="side-tab" id="tab-customer" aria-controls="pane-customer" aria-selected="true" data-i18n="customer"></button>
+    <button type="button" role="tab" class="side-tab" id="tab-owner" aria-controls="pane-owner" aria-selected="false">
+      <span data-i18n="owner"></span> <span class="badge" id="owner-badge" hidden></span>
+    </button>
+  </nav>
+
+  <main class="panes" id="panes">
+    <section class="pane" id="pane-customer" role="tabpanel" aria-labelledby="tab-customer">
+      <h2 class="pane-label"><span class="dot dot-customer" aria-hidden="true"></span><span data-i18n="customerLabel"></span></h2>
+      <iframe id="frame-customer" title="Customer chat"></iframe>
+    </section>
+    <section class="pane" id="pane-owner" role="tabpanel" aria-labelledby="tab-owner">
+      <h2 class="pane-label"><span class="dot dot-owner" aria-hidden="true"></span><span data-i18n="ownerLabel"></span></h2>
+      <iframe id="frame-owner" title="Owner inbox"></iframe>
+    </section>
+    <p class="try-status" id="status" role="status" hidden></p>
+  </main>
+
+  <script src="/static/try.js"></script>
+</body>
+</html>

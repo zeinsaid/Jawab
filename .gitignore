@@ -1,0 +1,25 @@
+# Environment
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# The local SQLite database (the demo server makes its own)
+*.db
+*.db-shm
+*.db-wal
+
+# Private working notes (hackathon material, plans) and notes for Claude
+notes/
+CLAUDE.md
+.claude/settings.local.json
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store

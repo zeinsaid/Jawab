@@ -1,0 +1,29 @@
+# Render blueprint for the public demo: New -> Blueprint in the Render dashboard, pick this repo.
+# One free web service serves the pages and the API. It sleeps after 15 idle minutes; the first
+# visit after that takes about a minute while it wakes.
+#
+# No database service: without DATABASE_URL the app uses a SQLite file on the server's disk, which
+# Render's free plan wipes on every restart and sleep. For this demo that's a feature: it resets
+# itself. A real deployment sets DATABASE_URL to a Postgres database (e.g. Neon) and keeps its data.
+#
+# Secrets are never in this file: Render asks for OPENAI_API_KEY when the blueprint is first
+# applied (sync: false), and generates PLUG_OWNER_KEY.
+
+services:
+  - type: web
+    name: jawab
+    runtime: python
+    plan: free
+    region: frankfurt # the closest region to both Cyprus and the Gulf
+    buildCommand: uv sync --frozen --no-dev
+    # --proxy-headers: visitors reach us through Render's proxy, which passes on their address in
+    # X-Forwarded-For; the rate limits use it (app/main.py, visitor_id).
+    startCommand: uv run --no-sync uvicorn app.main:from_env --factory --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips "*"
+    healthCheckPath: /health
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: PLUG_OWNER_KEY
+        generateValue: true
+      - key: JAWAB_MODEL
+        value: gpt-6-luna

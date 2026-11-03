@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0F766E">
+  <meta name="referrer" content="no-referrer">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <title>Create your AI receptionist · Jawab</title>
+  <meta name="description" content="Paste your price list or answer a few questions, and get an AI receptionist that answers your customers in Arabic and English.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Jawab">
+  <meta property="og:title" content="Create your AI receptionist · Jawab">
+  <meta property="og:description" content="Paste your price list or answer a few questions, and get an AI receptionist that answers your customers in Arabic and English.">
+  <meta name="twitter:card" content="summary">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=IBM+Plex+Sans+Arabic:wght@400;600;700&display=swap">
+  <!-- chat.css: colours, bubbles, badges, entries. owner.css: buttons, KB cards, copy rows. -->
+  <link rel="stylesheet" href="/static/chat.css">
+  <link rel="stylesheet" href="/static/owner.css">
+  <link rel="stylesheet" href="/static/start.css">
+</head>
+<body class="start-body">
+  <div class="start">
+    <header class="start-header">
+      <div class="brand">
+        <a class="wordmark" href="/"><span>Jawab</span><span class="wordmark-ar" lang="ar">جواب</span></a>
+        <p class="subtitle" data-i18n="tagline"></p>
+      </div>
+      <div class="lang-toggle" role="group" aria-label="Language">
+        <button type="button" class="lang" data-lang="en" lang="en">EN</button>
+        <button type="button" class="lang" data-lang="ar" lang="ar">عربي</button>
+      </div>
+    </header>
+
+    <ol class="steps" id="steps">
+      <li data-step="setup"><span class="step-num">1</span><span data-i18n="stepSetup"></span></li>
+      <li data-step="interview"><span class="step-num">2</span><span data-i18n="stepInterview"></span></li>
+      <li data-step="draft"><span class="step-num">3</span><span data-i18n="stepDraft"></span></li>
+      <li data-step="live"><span class="step-num">4</span><span data-i18n="stepLive"></span></li>
+    </ol>
+
+    <!-- Step 1: name and paste (quick), or name only (full interview) -->
+    <section id="step-setup" class="panel-card">
+      <h2 class="step-title" data-i18n="setupTitle"></h2>
+      <p class="step-intro" id="setup-intro"></p>
+      <form id="setup-form" class="setup-form" novalidate>
+        <label for="business-name" data-i18n="nameLabel"></label>
+        <input id="business-name" type="text" maxlength="80" autocomplete="organization" dir="auto"
+               data-i18n-placeholder="namePlaceholder" required>
+        <div id="paste-block">
+          <label for="paste" data-i18n="pasteLabel"></label>
+          <textarea id="paste" rows="12" maxlength="20000" dir="auto" data-i18n-placeholder="pastePlaceholder"></textarea>
+        </div>
+        <div class="setup-actions">
+          <button type="submit" id="create" class="primary big" data-i18n="create"></button>
+          <button type="button" id="switch-mode" class="link-button"></button>
+        </div>
+        <p class="form-status" id="setup-status" role="status"></p>
+      </form>
+    </section>
+
+    <!-- Step 2: the interview -->
+    <section id="step-interview" class="panel-card" hidden>
+      <div class="progress-head">
+        <span id="progress-label"></span>
+        <button type="button" id="skip" class="secondary small-button" data-i18n="skip"></button>
+      </div>
+      <div class="progress" role="progressbar" aria-valuemin="0" id="progress"><span id="progress-bar"></span></div>
+      <ol id="messages" class="messages interview" aria-live="polite"></ol>
+      <form id="composer" class="composer">
+        <textarea id="reply" rows="1" maxlength="2000" dir="auto" data-i18n-placeholder="replyPlaceholder"
+                  data-i18n-aria-label="replyPlaceholder"></textarea>
+        <button id="send" type="submit" data-i18n="send"></button>
+      </form>
+      <p class="form-status pad" id="interview-status" role="status"></p>
+    </section>
+
+    <!-- Step 3: review the draft -->
+    <section id="step-draft" class="panel-card" hidden>
+      <h2 class="step-title" data-i18n="draftTitle"></h2>
+      <p class="step-intro" id="draft-intro"></p>
+      <div id="open-questions" class="open-questions" hidden>
+        <h3 data-i18n="openQuestions"></h3>
+        <p class="small" data-i18n="openQuestionsHint"></p>
+        <ul id="open-questions-list"></ul>
+      </div>
+      <div id="kb-errors" class="kb-errors" role="alert" hidden>
+        <h3 data-i18n="errorsTitle"></h3>
+        <ul id="kb-errors-list"></ul>
+      </div>
+      <div class="draft-tools">
+        <button type="button" id="toggle-raw" class="secondary" data-i18n="editRaw"></button>
+      </div>
+      <div id="raw-block" hidden>
+        <p class="small muted" data-i18n="rawHint"></p>
+        <textarea id="raw" class="raw" rows="18" spellcheck="false" dir="ltr" aria-label="Knowledge base"></textarea>
+      </div>
+      <div id="cards" class="draft-cards"></div>
+      <div class="publish-bar">
+        <button type="button" id="publish" class="primary big" data-i18n="publish" disabled></button>
+        <p class="form-status" id="draft-status" role="status"></p>
+      </div>
+    </section>
+
+    <!-- Step 4: live -->
+    <section id="step-live" class="panel-card" hidden>
+      <h2 class="live-title" data-i18n="liveTitle"></h2>
+      <p class="step-intro" id="live-intro"></p>
+      <a id="try" class="primary big try" target="_blank" rel="noopener" data-i18n="tryIt"></a>
+
+      <div class="share-item">
+        <h2 data-i18n="customerLink"></h2>
+        <p class="muted" data-i18n="customerLinkHint"></p>
+        <div class="copy-row"><code id="chat-url" dir="ltr"></code>
+          <button type="button" class="copy" data-copy="chat-url" data-i18n="copy"></button></div>
+      </div>
+      <div class="share-item private">
+        <h2 data-i18n="ownerLink"></h2>
+        <p class="warning" data-i18n="ownerLinkHint"></p>
+        <div class="copy-row"><code id="owner-url" dir="ltr"></code>
+          <button type="button" class="copy" data-copy="owner-url" data-i18n="copy"></button></div>
+      </div>
+      <div class="share-item">
+        <h2 data-i18n="embed"></h2>
+        <p class="muted" data-i18n="embedHint"></p>
+        <div class="copy-row"><code id="embed-html" class="snippet" dir="ltr"></code>
+          <button type="button" class="copy" data-copy="embed-html" data-i18n="copy"></button></div>
+      </div>
+    </section>
+
+    <footer class="start-footer">
+      <button type="button" id="start-over" class="link-button" hidden></button>
+    </footer>
+  </div>
+
+  <!-- While the model works: a friendly spinner with what it's doing -->
+  <div id="working" class="working" hidden role="status" aria-live="polite">
+    <div class="working-card">
+      <span class="spinner" aria-hidden="true"></span>
+      <p id="working-text"></p>
+      <p id="working-sub" class="muted small"></p>
+    </div>
+  </div>
+
+  <script src="/static/start.js"></script>
+</body>
+</html>

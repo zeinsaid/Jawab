@@ -1,0 +1,27 @@
+[project]
+name = "jawab"
+version = "1.0.0"
+description = "Jawab: an AI receptionist for small businesses, in Arabic and English, built on the Shop-Assistant engine"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "pydantic",
+    "sqlalchemy>=2,<3",
+    "psycopg[binary]",
+    "httpx",
+    # The engine: the brain, the learning call and the onboarding interview (github.com/zeinsaid/Shop-Assistant).
+    "shop-assistant[openai]",
+]
+
+[tool.uv.sources]
+shop-assistant = { git = "https://github.com/zeinsaid/Shop-Assistant", tag = "v1.0.0" }
+
+[dependency-groups]
+dev = [
+    "pytest",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The Plug Print Shop · Printing next to the University of Nicosia</title>
+  <meta name="description" content="A demo shop website showing the Jawab chat bubble. Printing, scanning, binding and lamination in Engomi, Nicosia, open 24/7.">
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23111'/%3E%3Ctext x='16' y='23' font-family='Arial' font-weight='700' font-size='19' fill='%23FFD400' text-anchor='middle'%3EP%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=IBM+Plex+Sans+Arabic:wght@400;600;700&display=swap">
+  <!-- A stand-in for a real shop's own website: its own look on purpose, nothing from Jawab except the script at the end. -->
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #fbfaf7;
+      color: #161616;
+      font: 16px/1.6 "IBM Plex Sans", "IBM Plex Sans Arabic", "Helvetica Neue", Arial, sans-serif;
+    }
+    a { color: inherit; }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 0 20px; }
+
+    .ink { display: flex; height: 6px; }
+    .ink span { flex: 1; }
+
+    header { background: #111; color: #fff; }
+    header .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 68px; }
+    .logo { font-size: 1.35rem; font-weight: 800; letter-spacing: -0.02em; text-decoration: none; }
+    .logo b { color: #ffd400; }
+    nav { display: flex; gap: 22px; font-size: 0.95rem; }
+    nav a { text-decoration: none; opacity: 0.85; padding: 10px 0; }
+    nav a:hover { opacity: 1; text-decoration: underline; }
+
+    .hero { padding: 64px 0 56px; border-bottom: 1px solid #e5e2da; }
+    .hero h1 { margin: 0 0 16px; font-size: clamp(2rem, 5.5vw, 3.2rem); line-height: 1.08; letter-spacing: -0.03em; max-width: 680px; }
+    .hero h1 em { font-style: normal; background: linear-gradient(transparent 62%, #ffd400 62%); }
+    .hero p { margin: 0 0 10px; max-width: 600px; font-size: 1.1rem; color: #444; }
+    .badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; padding: 0; list-style: none; }
+    .badges li { padding: 6px 14px; border: 1.5px solid #161616; border-radius: 999px; font-size: 0.88rem; font-weight: 600; }
+
+    section { padding: 48px 0; }
+    h2 { margin: 0 0 6px; font-size: 1.6rem; letter-spacing: -0.02em; }
+    .note { margin: 0 0 22px; color: #666; font-size: 0.95rem; }
+
+    table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #e5e2da; }
+    th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #eeebe4; vertical-align: top; }
+    th { background: #111; color: #fff; font-size: 0.85rem; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; }
+    td:not(:first-child), th:not(:first-child) { text-align: right; white-space: nowrap; }
+    tbody tr:nth-child(even) { background: #faf8f3; }
+    td small { display: block; color: #777; font-size: 0.82rem; }
+
+    .visit { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+    .visit div { padding: 20px; background: #fff; border: 1px solid #e5e2da; border-top: 4px solid #111; }
+    .visit h3 { margin: 0 0 6px; font-size: 1rem; }
+    .visit p { margin: 0; color: #444; font-size: 0.95rem; }
+
+    footer { padding: 28px 0 110px; background: #111; color: #bbb; font-size: 0.88rem; }
+    footer p { margin: 0 0 4px; }
+
+    @media (max-width: 700px) {
+      nav { display: none; }
+      .hero { padding: 40px 0 36px; }
+      section { padding: 36px 0; }
+      .visit { grid-template-columns: minmax(0, 1fr); }
+      th, td { padding: 10px 8px; }
+      th { font-size: 0.75rem; }
+      .logo { display: inline-block; line-height: 44px; } /* a 44px tap target that keeps the space before "Print Shop" */
+    }
+  </style>
+</head>
+<body>
+  <div class="ink" aria-hidden="true"><span style="background:#00AEEF"></span><span style="background:#EC008C"></span><span style="background:#FFD400"></span><span style="background:#111"></span></div>
+  <header>
+    <div class="wrap">
+      <a class="logo" href="/demo/the-plug">The Plug <b>Print Shop</b></a>
+      <nav aria-label="Main">
+        <a href="#prices">Prices</a>
+        <a href="#visit">Visit us</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="hero">
+      <div class="wrap">
+        <h1>Printing next to the University of Nicosia, <em>open 24/7</em>.</h1>
+        <p>Theses, notes, posters and architecture drawings printed while you wait. Bring a USB stick or send your files by WhatsApp, Viber or email.</p>
+        <p>Spiral binding, lamination, scanning, business cards and passport photos too. Questions? Tap the chat button: we answer in English and Arabic.</p>
+        <ul class="badges">
+          <li>Open 24 hours</li>
+          <li>A4 from €0.05 a page</li>
+          <li>Card or cash</li>
+        </ul>
+      </div>
+    </div>
+
+    <section id="prices">
+      <div class="wrap">
+        <h2>Prices</h2>
+        <p class="note">Estimates; staff confirm the final price when you order.</p>
+        <table>
+          <thead>
+            <tr><th scope="col">Service</th><th scope="col">Price</th><th scope="col">In bulk</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>A4 black &amp; white</td><td>€0.20 / page</td><td>from €0.05</td></tr>
+            <tr><td>A4 colour</td><td>€0.50 / page</td><td>from €0.15</td></tr>
+            <tr><td>A3 black &amp; white</td><td>€0.40 / page</td><td>from €0.10</td></tr>
+            <tr><td>A3 colour</td><td>€1.00 / page</td><td>from €0.30</td></tr>
+            <tr><td>Poster A1, black &amp; white<small>plain paper, for line drawings</small></td><td>€4.00</td><td>from €3.40</td></tr>
+            <tr><td>Lamination, A4</td><td>€1.00 / sheet</td><td>from €0.40</td></tr>
+            <tr><td>Spiral binding</td><td>€2.50 – €5</td><td>per book</td></tr>
+            <tr><td>Business cards<small>350g card</small></td><td>100 for €25</td><td>1000 for €110</td></tr>
+            <tr><td>Passport photos<small>set of 8</small></td><td>€10 – €15</td><td>&nbsp;</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="visit">
+      <div class="wrap">
+        <h2>Visit us</h2>
+        <p class="note">Right behind the Mall of Engomi, next to the Serious Black coffee shop.</p>
+        <div class="visit">
+          <div><h3>Address</h3><p>Asomatou 9, Egkomi<br>Lefkosia 2414, Cyprus</p></div>
+          <div><h3>Hours</h3><p>Open 24/7. For bigger jobs, come between 8:00 and 18:00.</p></div>
+          <div><h3>Payment</h3><p>Card and cash. Small jobs are paid on pickup.</p></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <p>© 2026 The Plug Mini Market and Print Shop</p>
+      <p>Demo website: the chat button in the corner is Jawab, added with one line of code.</p>
+    </div>
+  </footer>
+
+  <script src="/embed.js?b=the-plug" async></script>
+</body>
+</html>

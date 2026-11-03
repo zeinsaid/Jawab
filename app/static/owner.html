@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0F766E">
+  <meta name="robots" content="noindex">
+  <meta name="referrer" content="no-referrer">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <title>Owner dashboard · Jawab</title>
+  <meta name="description" content="Answer your customers' questions and teach your assistant.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=IBM+Plex+Sans+Arabic:wght@400;600;700&display=swap">
+  <!-- chat.css gives the shared colours, bubbles, badges and entry styles; owner.css the dashboard. -->
+  <link rel="stylesheet" href="/static/chat.css">
+  <link rel="stylesheet" href="/static/owner.css">
+</head>
+<body class="owner-body">
+  <div class="dashboard">
+    <nav class="brandbar" aria-label="Jawab"><a class="wordmark" href="/"><span>Jawab</span><span class="wordmark-ar" lang="ar">جواب</span></a></nav>
+    <header class="dash-header">
+      <div class="identity">
+        <span class="avatar" aria-hidden="true" id="avatar">J</span>
+        <div class="identity-text">
+          <h1 id="business-name" dir="auto">Owner dashboard</h1>
+          <p class="subtitle">Owner dashboard</p>
+        </div>
+      </div>
+      <a id="customer-link" class="ghost-button" target="_blank" rel="noopener" hidden>Customer chat ↗</a>
+    </header>
+
+    <div id="notice" class="notice" role="alert" hidden></div>
+
+    <div id="app" hidden>
+      <section class="stats" aria-label="This week at a glance">
+        <div class="stat"><span class="stat-value" id="stat-messages">–</span><span class="stat-label">Customer messages this week</span></div>
+        <div class="stat"><span class="stat-value" id="stat-answered">–</span><span class="stat-label">Answered by the bot on its own</span></div>
+        <div class="stat"><span class="stat-value" id="stat-learned">–</span><span class="stat-label">Questions learned</span></div>
+        <div class="stat"><span class="stat-value" id="stat-pending">–</span><span class="stat-label">Waiting for you</span></div>
+      </section>
+
+      <nav class="tabs" role="tablist" aria-label="Dashboard sections">
+        <button type="button" role="tab" class="tab" id="tab-inbox" aria-controls="panel-inbox" aria-selected="true">
+          Inbox <span class="count" id="inbox-count" hidden></span>
+        </button>
+        <button type="button" role="tab" class="tab" id="tab-knowledge" aria-controls="panel-knowledge" aria-selected="false">Knowledge</button>
+        <button type="button" role="tab" class="tab" id="tab-share" aria-controls="panel-share" aria-selected="false">Share</button>
+      </nav>
+
+      <section id="panel-inbox" class="tab-panel" role="tabpanel" aria-labelledby="tab-inbox">
+        <h2 class="group-title">Waiting for you</h2>
+        <div id="pending" class="cards" aria-live="polite"></div>
+        <p id="pending-empty" class="empty" hidden>All clear. New questions and handed-off chats show up here within a few seconds.</p>
+        <h2 class="group-title" id="recent-title" hidden>Recently handled</h2>
+        <div id="recent" class="cards"></div>
+      </section>
+
+      <section id="panel-knowledge" class="tab-panel" role="tabpanel" aria-labelledby="tab-knowledge" hidden>
+        <p class="muted intro" id="knowledge-intro">What the assistant knows. Public entries can be told to customers; internal ones guide the assistant but are never shown to them.</p>
+        <div id="knowledge"></div>
+        <section id="demo-reset" class="demo-reset" aria-labelledby="demo-reset-title" hidden>
+          <h2 id="demo-reset-title" class="group-title">Demo</h2>
+          <p class="muted small">Start the demo again: the original knowledge base, and no chats or questions.</p>
+          <button type="button" id="demo-reset-start" class="secondary">Reset demo</button>
+          <div id="demo-reset-confirm" class="demo-reset-confirm" role="alertdialog" aria-labelledby="demo-reset-warning" hidden>
+            <p id="demo-reset-warning"><strong>Reset the demo?</strong> This deletes every conversation, message and question,
+              and removes everything the assistant learned. It can't be undone.</p>
+            <div class="form-actions">
+              <button type="button" id="demo-reset-yes" class="danger">Yes, reset</button>
+              <button type="button" id="demo-reset-cancel" class="secondary">Cancel</button>
+            </div>
+          </div>
+          <p id="demo-reset-status" class="form-status" role="status"></p>
+        </section>
+      </section>
+
+      <section id="panel-share" class="tab-panel" role="tabpanel" aria-labelledby="tab-share" hidden>
+        <div class="share-item">
+          <h2>Customer chat link</h2>
+          <p class="muted">Put it on your website, Instagram bio or a QR code at the counter.</p>
+          <div class="copy-row"><code id="share-customer" dir="ltr"></code><button type="button" class="copy" data-copy="share-customer">Copy</button></div>
+        </div>
+        <div class="share-item">
+          <h2>Your owner link</h2>
+          <p class="muted">Keep it private: anyone with this link can answer your customers.</p>
+          <div class="copy-row"><code id="share-owner" dir="ltr"></code><button type="button" class="copy" data-copy="share-owner">Copy</button></div>
+        </div>
+        <div class="share-item">
+          <h2>Chat bubble on your website</h2>
+          <p class="muted">Paste this one line into your website's HTML, just before &lt;/body&gt;. A round chat button appears in the bottom-right corner of every page.</p>
+          <div class="copy-row"><code id="share-bubble" class="snippet" dir="ltr"></code><button type="button" class="copy" data-copy="share-bubble">Copy</button></div>
+        </div>
+        <div class="share-item">
+          <h2>Embed on your website</h2>
+          <p class="muted">Paste this HTML where the chat should appear.</p>
+          <div class="copy-row"><code id="share-embed" class="snippet" dir="ltr"></code><button type="button" class="copy" data-copy="share-embed">Copy</button></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="/static/owner.js"></script>
+</body>
+</html>

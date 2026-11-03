@@ -1,0 +1,150 @@
+/* /try: the visitor's own sandbox, customer chat and owner inbox side by side (tabs on phones).
+   Colours, top bar, buttons and the language toggle come from landing.css. */
+
+.try-body { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
+
+.try-topbar { max-width: none; width: 100%; padding-inline: 20px; padding-block: 8px; }
+.try-actions { display: flex; align-items: center; gap: 10px; }
+.button.small { min-height: 44px; padding: 8px 16px; font-size: 0.9rem; width: auto; }
+
+.try-intro { padding: 4px 20px 12px; max-width: 1400px; width: 100%; margin: 0 auto; }
+.try-intro h1 { margin: 0 0 10px; font-size: 1.35rem; line-height: 1.3; letter-spacing: -0.01em; }
+.try-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.93rem;
+  line-height: 1.45;
+}
+.try-steps li {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.step-n {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+.example {
+  display: inline;
+  margin: 0;
+  padding: 1px 8px;
+  border: 1px dashed var(--accent);
+  border-radius: 8px;
+  background: none;
+  color: var(--accent-strong);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.example:hover { background: var(--accent-soft); }
+.try-note { margin: 8px 0 0; color: var(--muted); font-size: 0.85rem; }
+
+.side-tabs { display: none; }
+
+.panes {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 20px 16px;
+  min-height: 560px;
+}
+.pane { display: flex; flex-direction: column; min-height: 0; }
+.pane-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.dot { width: 9px; height: 9px; border-radius: 50%; }
+.dot-customer { background: var(--accent); }
+.dot-owner { background: var(--learned); }
+.pane iframe {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: 0 10px 30px -18px var(--shadow);
+}
+.try-status { grid-column: 1 / -1; margin: 0; color: var(--muted); text-align: center; }
+.try-status.error { color: #b42318; }
+
+@media (min-width: 901px) {
+  .try-body { height: 100vh; height: 100dvh; }
+  .panes { min-height: 0; }
+}
+
+/* Phones and narrow windows: one side at a time, switched with tabs. */
+@media (max-width: 900px) {
+  .try-topbar { padding-inline: 12px; }
+  .try-intro { padding-inline: 12px; }
+  .try-intro h1 { font-size: 1.1rem; }
+  .try-steps { grid-template-columns: 1fr; gap: 6px; font-size: 0.88rem; }
+  .try-steps li { padding: 6px 10px; align-items: center; }
+  /* Room for the chat: on phones the steps keep only their titles (and the example). */
+  .try-steps [data-i18n$="Text"], .try-note { display: none; }
+  .step-n { width: 22px; height: 22px; }
+  .side-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin: 0 12px 8px;
+    padding: 4px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+  }
+  .side-tab {
+    min-height: 44px;
+    border: 0;
+    border-radius: 999px;
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .side-tab[aria-selected="true"] { background: var(--accent); color: var(--accent-text); }
+  .badge {
+    display: inline-grid;
+    place-items: center;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: var(--learned);
+    color: #fff;
+    font-size: 0.78rem;
+  }
+  .panes { grid-template-columns: 1fr; padding: 0 8px 8px; min-height: 0; }
+  .pane { height: 78vh; height: 78dvh; }
+  .pane[hidden] { display: none !important; }
+  .pane-label { display: none; }
+  .try-actions { gap: 6px; }
+  .button.small { padding: 8px 12px; }
+}

@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0F766E">
+  <title>Jawab · The AI receptionist that never guesses</title>
+  <meta name="description" content="Answers your customers in Arabic and English from your own price list. When it doesn't know, it asks you, and learns your answer.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Jawab">
+  <meta property="og:title" content="Jawab · The AI receptionist that never guesses">
+  <meta property="og:description" content="Answers your customers in Arabic and English from your own price list. When it doesn't know, it asks you, and learns your answer.">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:locale:alternate" content="ar_AE">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=IBM+Plex+Sans+Arabic:wght@400;600;700&display=swap">
+  <link rel="stylesheet" href="/static/landing.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="wordmark" href="/"><span>Jawab</span><span class="wordmark-ar" lang="ar">جواب</span></a>
+    <div class="lang-toggle" role="group" aria-label="Language">
+      <button type="button" class="lang" data-lang="en" lang="en">EN</button>
+      <button type="button" class="lang" data-lang="ar" lang="ar">عربي</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <span class="hero-mark" aria-hidden="true" lang="ar">جواب</span>
+      <div class="hero-copy">
+        <p class="eyebrow" data-i18n="eyebrow"></p>
+        <h1 data-i18n="heroTitle"></h1>
+        <p class="hero-sub" data-i18n="heroSub"></p>
+        <div class="hero-actions">
+          <a class="button primary" href="/try" data-i18n="tryDemo"></a>
+          <a class="button secondary" href="/start" data-i18n="setUp"></a>
+        </div>
+        <div class="made-for">
+          <span class="made-for-label" data-i18n="madeFor"></span>
+          <ul class="pills">
+            <li data-i18n="shopPrint"></li>
+            <li data-i18n="shopTailors"></li>
+            <li data-i18n="shopSalons"></li>
+            <li data-i18n="shopGarages"></li>
+            <li data-i18n="shopCafes"></li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- A static picture of the demo loop: ask, the owner answers, it learns. No API calls. -->
+      <div class="hero-demo" id="hero-demo" role="img" data-i18n-aria-label="mockAria">
+        <div class="phone" dir="ltr">
+          <div class="phone-head">
+            <span class="phone-avatar">T</span>
+            <span class="phone-name"><strong>The Plug</strong><span class="phone-status" data-i18n="mockStatus"></span></span>
+          </div>
+          <ol class="phone-chat">
+            <li class="b b-customer reveal" style="--i: 0" dir="rtl" lang="ar">هل أنتم مفتوحون يوم عيد الميلاد؟</li>
+            <li class="b b-bot reveal" style="--i: 1"><span class="mini-badge mini-ask" data-i18n="mockAsking"></span><span dir="rtl" lang="ar">سأتحقق من الفريق وأعود إليك.</span></li>
+            <li class="owner-pop reveal" style="--i: 2">
+              <p dir="auto"><strong data-i18n="mockOwner"></strong> <bdi lang="en">Closed on 25 December, back on the 26th.</bdi></p>
+              <span class="mini-save" data-i18n="mockSave"></span>
+            </li>
+            <li class="phone-divider reveal" style="--i: 3"><span data-i18n="mockNewChat"></span></li>
+            <li class="b b-customer reveal" style="--i: 3">are you open on christmas day?</li>
+            <li class="b b-bot reveal" style="--i: 4"><span class="mini-badge mini-learned" data-i18n="tagLearned"></span>We're closed on 25 December and open 24/7 again from the 26th.</li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="how-title">
+      <h2 id="how-title" data-i18n="howTitle"></h2>
+      <ol class="steps">
+        <li class="step">
+          <span class="step-num" aria-hidden="true">1</span>
+          <h3 data-i18n="step1Title"></h3>
+          <p data-i18n="step1Text"></p>
+        </li>
+        <li class="step">
+          <span class="step-num" aria-hidden="true">2</span>
+          <h3 data-i18n="step2Title"></h3>
+          <p data-i18n="step2Text"></p>
+        </li>
+        <li class="step">
+          <span class="step-num" aria-hidden="true">3</span>
+          <h3 data-i18n="step3Title"></h3>
+          <p data-i18n="step3Text"></p>
+        </li>
+      </ol>
+    </section>
+
+    <section class="section" aria-labelledby="why-title">
+      <h2 id="why-title" data-i18n="whyTitle"></h2>
+      <div class="cards">
+        <article class="card">
+          <span class="card-tag tag-answer" data-i18n="tagAnswer"></span>
+          <h3 data-i18n="card1Title"></h3>
+          <p data-i18n="card1Text"></p>
+        </article>
+        <article class="card">
+          <span class="card-tag tag-learned" data-i18n="tagLearned"></span>
+          <h3 data-i18n="card2Title"></h3>
+          <p data-i18n="card2Text"></p>
+        </article>
+        <article class="card">
+          <span class="card-tag tag-lang" aria-hidden="true" dir="ltr"><bdi lang="en">EN</bdi> · <bdi lang="ar">عربي</bdi> · <bdi lang="en">3arabi</bdi></span>
+          <h3 data-i18n="card3Title"></h3>
+          <p data-i18n="card3Text"></p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section embed" aria-labelledby="embed-title">
+      <h2 id="embed-title" data-i18n="embedTitle"></h2>
+      <p data-i18n="embedText"></p>
+      <div class="snippet-row">
+        <code id="embed-snippet" dir="ltr"></code>
+        <button type="button" class="copy-button" id="copy-snippet" data-i18n="copy"></button>
+      </div>
+      <a class="button secondary" href="/demo/the-plug" data-i18n="embedDemo"></a>
+    </section>
+
+  </main>
+
+  <footer class="site-footer">
+    <p><span data-i18n="footer"></span>
+      <span class="footer-links"><a href="https://github.com/zeinsaid/jawab" target="_blank" rel="noopener" data-i18n="code"></a><span aria-hidden="true">·</span><a href="https://github.com/zeinsaid/Shop-Assistant" target="_blank" rel="noopener" data-i18n="engine"></a><span aria-hidden="true">·</span><a href="https://zeinsaid.github.io" target="_blank" rel="noopener" data-i18n="portfolio"></a></span></p>
+  </footer>
+
+  <script src="/static/landing.js"></script>
+</body>
+</html>
