@@ -136,3 +136,13 @@ def test_the_demo_shop_offers_english_greek_and_arabic():
         info = client.get(f"/api/b/{slug}/public").json()
         assert info["languages"] == ["en", "el", "ar"]
         assert any("Πόσο" in s for s in info["suggestions"])
+
+
+def test_missing_pages_get_the_styled_page_and_the_api_keeps_json():
+    client, _ = make()
+    for path in ("/b/nobody-here", "/owner/nobody-here?key=x", "/no-such-page"):
+        page = client.get(path)
+        assert page.status_code == 404 and "This page isn't here" in page.text and 'href="/try"' in page.text, path
+    api = client.get("/api/b/nobody-here/public")
+    assert api.status_code == 404 and api.json() == {"detail": "Business not found."}
+    assert client.get("/api/no-such-route").json() == {"detail": "Not Found"}

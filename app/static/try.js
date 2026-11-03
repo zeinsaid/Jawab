@@ -93,6 +93,10 @@ function showStatus(key, error = false) {
   status.hidden = !key;
   status.textContent = key ? t(key) : "";
   status.classList.toggle("error", error);
+  // The two sides (and the phone tabs) only show once there's a demo shop in them.
+  document.querySelector(".side-tabs").classList.toggle("waiting", Boolean(key));
+  $("pane-customer").classList.toggle("waiting", Boolean(key));
+  $("pane-owner").classList.toggle("waiting", Boolean(key));
 }
 
 async function exists(slug) {

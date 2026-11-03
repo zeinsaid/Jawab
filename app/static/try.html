@@ -52,6 +52,7 @@
   </nav>
 
   <main class="panes" id="panes">
+    <p class="try-status" id="status" role="status" hidden></p>
     <section class="pane" id="pane-customer" role="tabpanel" aria-labelledby="tab-customer">
       <h2 class="pane-label"><span class="dot dot-customer" aria-hidden="true"></span><span data-i18n="customerLabel"></span></h2>
       <iframe id="frame-customer" title="Customer chat"></iframe>
@@ -60,7 +61,6 @@
       <h2 class="pane-label"><span class="dot dot-owner" aria-hidden="true"></span><span data-i18n="ownerLabel"></span></h2>
       <iframe id="frame-owner" title="Owner inbox"></iframe>
     </section>
-    <p class="try-status" id="status" role="status" hidden></p>
   </main>
 
   <script src="/static/try.js"></script>

@@ -41,3 +41,17 @@ def test_refused_messages_dont_count():
     assert limiter.check("a") is not None
     assert limiter.check("a") is not None
     assert limiter._today == 1
+
+
+def test_visitors_are_identified_by_cloudflares_header_first():
+    from starlette.requests import Request
+
+    from app.main import visitor_id
+
+    def request(headers):
+        raw = [(k.lower().encode(), v.encode()) for k, v in headers.items()]
+        return Request({"type": "http", "headers": raw, "client": ("10.0.0.1", 1234)})
+
+    assert visitor_id(request({"CF-Connecting-IP": "1.2.3.4", "X-Forwarded-For": "6.6.6.6, 1.2.3.4"})) == "1.2.3.4"
+    assert visitor_id(request({"X-Forwarded-For": "5.5.5.5, 10.0.0.2"})) == "5.5.5.5"
+    assert visitor_id(request({})) == "10.0.0.1"

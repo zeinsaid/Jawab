@@ -23,8 +23,9 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.engine import Engine
 
@@ -51,7 +52,7 @@ LIMIT_PER_VISITOR_PER_HOUR = 40
 LIMIT_PER_DAY = 1500
 ONBOARDINGS_PER_VISITOR_PER_DAY = 3  # an onboarding is several model calls, one of them long
 ONBOARDINGS_PER_DAY = 30
-SANDBOXES_PER_VISITOR_PER_DAY = 10
+SANDBOXES_PER_VISITOR_PER_DAY = 30  # no model call; shared networks share an address
 SANDBOXES_PER_DAY = 400
 DAY = 24 * 3600
 DEFAULT_DATABASE_URL = "sqlite:///jawab.db"
@@ -108,8 +109,19 @@ class OnboardingKB(BaseModel):
     kb_markdown: str = Field(min_length=1, max_length=MAX_KB_CHARS)
 
 
+def not_found_page() -> HTMLResponse:
+    """The styled 404 page, e.g. for a demo shop that went with a reset."""
+    return HTMLResponse((STATIC / "notfound.html").read_text(encoding="utf-8"), status_code=404)
+
+
 def visitor_id(request: Request) -> str:
-    """Behind the host's proxy every request comes from the proxy, so use the first forwarded IP."""
+    """Who a request is from, for the rate limits. Behind the host's proxy every request comes from
+    the proxy, so the visitor's address comes from a header. Cloudflare (in front of Render) sets
+    CF-Connecting-IP itself, so a visitor can't fake it; X-Forwarded-For's first entry can be set by
+    the visitor, so it's only the fallback. Either way the daily caps bound the total spend."""
+    cloudflare = request.headers.get("cf-connecting-ip", "").strip()
+    if cloudflare:
+        return cloudflare
     forwarded = request.headers.get("x-forwarded-for", "")
     first = forwarded.split(",")[0].strip()
     if first:
@@ -132,6 +144,13 @@ def create_app(engine: Engine, client: LLMClient, limiter: RateLimiter | None = 
     brains = BrainCache(client)
 
     app = FastAPI(title="Jawab", docs_url=None, redoc_url=None, openapi_url=None)
+
+    @app.exception_handler(StarletteHTTPException)
+    async def friendly_404(request: Request, exc: StarletteHTTPException):
+        # Pages get a proper page; the API keeps its JSON errors.
+        if exc.status_code == 404 and not request.url.path.startswith("/api/"):
+            return not_found_page()
+        return JSONResponse({"detail": exc.detail}, status_code=exc.status_code, headers=getattr(exc, "headers", None))
 
     @app.middleware("http")
     async def revalidate_pages(request: Request, call_next):
@@ -158,7 +177,7 @@ def create_app(engine: Engine, client: LLMClient, limiter: RateLimiter | None = 
         with session_factory() as session:
             business = get_business(session, slug)
             if business is None:
-                return HTMLResponse("<h1>Not found</h1><p>No business at this address.</p>", status_code=404)
+                return not_found_page()
             name = business.name
         # Link previews (WhatsApp) don't run JavaScript, so the business's name goes into the HTML.
         page = (STATIC / "chat.html").read_text(encoding="utf-8")
@@ -169,7 +188,7 @@ def create_app(engine: Engine, client: LLMClient, limiter: RateLimiter | None = 
         # The page holds nothing secret; every API call it makes checks the key.
         with session_factory() as session:
             if get_business(session, slug) is None:
-                return HTMLResponse("<h1>Not found</h1><p>No business at this address.</p>", status_code=404)
+                return not_found_page()
         return FileResponse(STATIC / "owner.html")
 
     @app.get("/start", include_in_schema=False)
