@@ -91,10 +91,14 @@ def escalation_view(session: Session, business: Business, escalation: Escalation
     view = {
         "id": escalation.id,
         "kind": escalation.kind,
+        "reason": escalation.reason,  # handoffs: abuse, complaint, lead, other
         "status": escalation.status,
         "question": escalation.question,
         "conversation_id": str(escalation.conversation_id),
         "conversation_state": conversation.state if conversation else None,
+        "customer_language": conversation.language if conversation else None,
+        # Owner-only: where the answer will be emailed, if the customer left an address.
+        "customer_email": conversation.customer_email if conversation else None,
         "created_at": _iso(escalation.created_at),
         "answered_at": _iso(escalation.answered_at),
         "owner_answer": escalation.owner_answer,
@@ -228,6 +232,17 @@ def learned_origins(session: Session, business: Business) -> dict[str, dict]:
     return origins
 
 
+def customer_question(session: Session, business: Business, escalation: Escalation) -> str | None:
+    """The customer's own words that led to an escalation: their last message before the bot's."""
+    return session.scalar(
+        select(Message.text)
+        .where(Message.business_id == business.id, Message.conversation_id == escalation.conversation_id,
+               Message.role == Role.CUSTOMER, Message.id < escalation.message_id)
+        .order_by(Message.id.desc())
+        .limit(1)
+    )
+
+
 # --- Acting ---------------------------------------------------------------------------------------
 
 
@@ -273,7 +288,7 @@ def answer_ask_owner(session: Session, business: Business, escalation_id: int, o
                           action=str(Action.ANSWER), cited_entries=[],
                           reasoning=f"Relayed the owner's answer. {outcome.result.reasoning}")
     # Back to the bot, unless a person has taken the chat over in the meantime.
-    if conversation.state != convs.HUMAN_HANDOFF:
+    if conversation.state not in convs.QUIET:
         conversation.state = convs.BOT_ACTIVE
     session.commit()
     session.refresh(escalation)
@@ -411,7 +426,11 @@ def _claim_decision(session: Session, business: Business, escalation_id: int, de
 
 
 def demo_seed(business: Business) -> dict | None:
-    """The seed of a demo business (The Plug, or a visitor's sandbox copy of it), or None."""
+    """The seed of a demo business (The Plug on the public demo, or a visitor's sandbox copy of
+    it), or None. The database's `demo` flag decides, so where The Plug runs for real
+    (single-business mode) it can never be reset."""
+    if not business.demo:
+        return None
     slug = business.sandbox_of or business.slug
     return next((s for s in SEED_BUSINESSES if s["slug"] == slug and s.get("demo")), None)
 

@@ -3,11 +3,22 @@
 
 const SLUG = decodeURIComponent(location.pathname.split("/")[2] || "");
 const API = `/api/b/${encodeURIComponent(SLUG)}`;
-const SHOW_PANEL = new URLSearchParams(location.search).get("panel") === "1";
-// ?embed=1: inside the website bubble (embed.js), where the Jawab header bar isn't wanted.
-const EMBEDDED = new URLSearchParams(location.search).get("embed") === "1";
+const PARAMS = new URLSearchParams(location.search);
+const SHOW_PANEL = PARAMS.get("panel") === "1";
+// ?embed=1: inside the website bubble (jawab.js), where the Jawab header bar isn't wanted.
+// The bubble also passes ?lang= (the website's language, which wins over the one stored here) and
+// ?c= (the conversation, which the bubble keeps in the website's own storage: a chat iframe's
+// storage is partitioned or cleared by some browsers, the website's isn't).
+const EMBEDDED = PARAMS.get("embed") === "1";
 // ?frame=1: inside the /try page, which has its own Jawab bar.
-const FRAMED = new URLSearchParams(location.search).get("frame") === "1";
+const FRAMED = PARAMS.get("frame") === "1";
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+// Tell the bubble around us (jawab.js) what's happening: ready, failed, the conversation, close.
+function tellBubble(message) {
+  if (EMBEDDED && window.parent !== window) window.parent.postMessage(message, "*");
+}
 if (FRAMED) document.querySelector(".brandbar")?.remove();
 if (EMBEDDED) {
   document.querySelector(".brandbar")?.remove();
@@ -41,7 +52,7 @@ function compactHeader() {
   close.className = "ghost-button icon-button";
   close.dataset.i18nAriaLabel = close.dataset.i18nTitle = "closeChat";
   close.innerHTML = svg("M6 6l12 12M18 6L6 18");
-  close.addEventListener("click", () => window.parent.postMessage({ type: "jawab:close" }, "*"));
+  close.addEventListener("click", () => tellBubble({ type: "jawab:close" }));
   document.querySelector(".header-actions").append(close);
 }
 const CONVERSATION_KEY = `jawab:${SLUG}:conversation`;
@@ -72,6 +83,11 @@ const LABELS = {
     why: "Why this reply?",
     errorGeneric: "Something went wrong. Please try again.",
     errorNetwork: "Couldn't reach the assistant. Check your connection and try again.",
+    emailPrompt: "Leave your email and we'll send you the answer",
+    emailAria: "Your email",
+    emailSave: "Save",
+    emailInvalid: "That doesn't look like an email address.",
+    emailSaved: "Thanks! We'll email you the answer too.",
     notFound: "This chat isn't available.",
     footer: "Answers come only from {name}'s own information. When it isn't sure, it asks the team.",
     close: "Close",
@@ -117,6 +133,11 @@ const LABELS = {
     why: "Γιατί αυτή η απάντηση;",
     errorGeneric: "Κάτι πήγε στραβά. Δοκίμασε ξανά.",
     errorNetwork: "Δεν ήταν δυνατή η σύνδεση με τον βοηθό. Έλεγξε τη σύνδεσή σου και δοκίμασε ξανά.",
+    emailPrompt: "Άφησε το email σου και θα σου στείλουμε την απάντηση",
+    emailAria: "Το email σου",
+    emailSave: "Αποθήκευση",
+    emailInvalid: "Αυτό δεν μοιάζει με διεύθυνση email.",
+    emailSaved: "Ευχαριστούμε! Θα σου στείλουμε την απάντηση και με email.",
     notFound: "Αυτή η συνομιλία δεν είναι διαθέσιμη.",
     footer: "Οι απαντήσεις βγαίνουν μόνο από τις πληροφορίες του {name}. Όταν δεν είναι σίγουρος, ρωτάει την ομάδα.",
     close: "Κλείσιμο",
@@ -162,6 +183,11 @@ const LABELS = {
     why: "لماذا هذا الرد؟",
     errorGeneric: "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
     errorNetwork: "تعذّر الوصول إلى المساعد. تحقّق من اتصالك وحاول مرة أخرى.",
+    emailPrompt: "اترك بريدك الإلكتروني وسنرسل لك الإجابة",
+    emailAria: "بريدك الإلكتروني",
+    emailSave: "حفظ",
+    emailInvalid: "هذا لا يبدو عنوان بريد إلكتروني صحيحاً.",
+    emailSaved: "شكراً! سنرسل لك الإجابة عبر البريد الإلكتروني أيضاً.",
     notFound: "هذه المحادثة غير متاحة.",
     footer: "الإجابات مأخوذة فقط من معلومات {name}. وعندما لا يكون متأكداً، يسأل الفريق.",
     close: "إغلاق",
@@ -206,9 +232,11 @@ function save(key, value) {
 // --- State ----------------------------------------------------------------------------------------
 
 const UI_LANGS = ["en", "el", "ar"]; // the page labels exist in these
-let lang = UI_LANGS.includes(load(LANG_KEY)) ? load(LANG_KEY) : "en";
+const URL_LANG = PARAMS.get("lang");
+let lang = UI_LANGS.includes(URL_LANG) ? URL_LANG : UI_LANGS.includes(load(LANG_KEY)) ? load(LANG_KEY) : "en";
 let business = { name: "", suggestions: [] };
-let conversationId = load(CONVERSATION_KEY);
+let conversationId = EMBEDDED && UUID.test(PARAMS.get("c") || "") ? PARAMS.get("c") : load(CONVERSATION_KEY);
+if (conversationId) save(CONVERSATION_KEY, conversationId);
 let conversationState = "bot_active";
 let lastId = 0; // highest message ID shown, for polling
 const seen = new Set(); // message IDs already on the page
@@ -317,6 +345,10 @@ function addBot(message, panelData = null) {
     markOwnerReplied();
   }
   bubble.append(textNode(message.text));
+  if (message.contacts) {
+    // The business's contact line ("For anything urgent, call..."), under replies that need a person.
+    bubble.append(el("span", { className: "contacts", textContent: message.contacts, dir: "auto" }));
+  }
   if (SHOW_PANEL && panelData) {
     const entry = { data: panelData, bubble };
     const why = el("button", { type: "button", className: "why", dir: "auto" });
@@ -369,6 +401,70 @@ function addFromServer(message, { includeCustomer = false } = {}) {
   } else {
     lastId = Math.max(lastId, message.id); // our own message: already on the page
   }
+}
+
+// The business's own offline message ("Chat is offline right now. Call us on..."), in the page's
+// language: when the model can't be reached, or the server can't.
+function offlineText() {
+  const texts = business.offline_message || {};
+  return texts[lang] || texts.en || t("errorNetwork");
+}
+
+function addOffline(text) {
+  messagesEl.append(el("li", { className: "message bot offline" }, textNode(text || offlineText())));
+  scrollToEnd();
+}
+
+// "Leave your email and we'll send you the answer": under a question for the owner, once.
+function addEmailForm() {
+  if (!business.email_capture || messagesEl.querySelector(".email-capture")) return;
+  const li = el("li", { className: "message note email-capture" });
+  const label = el("label", { htmlFor: "email-input", dir: "auto" });
+  label.dataset.label = "emailPrompt";
+  label.textContent = t("emailPrompt");
+  // noValidate: our own message, in the page's language, instead of the browser's tooltip.
+  const row = el("form", { className: "email-row", noValidate: true });
+  const field = el("input", { type: "email", id: "email-input", autocomplete: "email", maxLength: 254,
+    placeholder: "name@example.com", dir: "ltr" });
+  field.dataset.i18nAriaLabel = "emailAria";
+  field.setAttribute("aria-label", t("emailAria"));
+  const saveButton = el("button", { type: "submit", className: "ghost-button" });
+  saveButton.dataset.label = "emailSave";
+  saveButton.textContent = t("emailSave");
+  const status = el("p", { className: "email-status", dir: "auto" });
+  status.setAttribute("role", "status");
+  row.append(field, saveButton);
+  li.append(label, row, status);
+  row.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const value = field.value.trim();
+    status.classList.remove("error");
+    if (!EMAIL.test(value) || value.length > 254) {
+      status.dataset.label = "emailInvalid";
+      status.textContent = t("emailInvalid");
+      status.classList.add("error");
+      return;
+    }
+    saveButton.disabled = true;
+    try {
+      const response = await fetch(`${API}/conversations/${conversationId}/email`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: value }),
+      });
+      if (!response.ok) throw new Error(String(response.status));
+      const done = el("span", { dir: "auto", textContent: t("emailSaved") });
+      done.dataset.label = "emailSaved";
+      li.classList.add("saved");
+      li.replaceChildren(done);
+    } catch {
+      status.dataset.label = "errorGeneric";
+      status.textContent = t("errorGeneric");
+      status.classList.add("error");
+    } finally {
+      saveButton.disabled = false;
+    }
+  });
+  messagesEl.append(li);
+  scrollToEnd();
 }
 
 // --- The decision panel ---------------------------------------------------------------------------
@@ -472,6 +568,7 @@ function setBusy(value) {
 function setConversation(id) {
   conversationId = id;
   save(CONVERSATION_KEY, id);
+  tellBubble({ type: "jawab:conversation", id });
 }
 
 function setState(state) {
@@ -508,11 +605,18 @@ async function send(text) {
     const response = await fetch(`${API}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ conversation_id: conversationId, message: text }),
+      body: JSON.stringify({ conversation_id: conversationId, message: text, lang }),
     });
     if (!response.ok) {
       typing.remove();
-      addNote(await readError(response), { error: true });
+      if (response.status >= 500) {
+        // The model or the server is down: the business's offline message, never an error.
+        let detail = null;
+        try { const data = await response.json(); if (data.offline) detail = data.detail; } catch { /* not JSON */ }
+        addOffline(detail);
+      } else {
+        addNote(await readError(response), { error: true });
+      }
       return;
     }
     const data = await response.json();
@@ -520,13 +624,15 @@ async function send(text) {
     setConversation(data.conversation_id);
 
     if (data.message) {
-      addBot(data.message, data.panel);
-      if (data.message.action === "ask_owner") addWaitingNote();
-      else if (data.message.action === "handoff") {
+      addBot({ ...data.message, contacts: data.contacts }, data.panel);
+      if (data.message.action === "ask_owner") {
+        addWaitingNote();
+        if (data.ask_email) addEmailForm();
+      } else if (data.message.action === "handoff" && data.state === "human_handoff") {
         addNote("handedOff", { label: true, className: "status-note" });
         teamNoteShown = true;
       }
-    } else if (!teamNoteShown) {
+    } else if (data.state === "human_handoff" && !teamNoteShown) {
       // A person has taken over: the message went to the team, and the bot stays quiet.
       addNote("sentToTeam", { label: true, className: "status-note" });
       teamNoteShown = true;
@@ -534,7 +640,7 @@ async function send(text) {
     setState(data.state);
   } catch {
     typing.remove();
-    addNote("errorNetwork", { error: true, label: true });
+    addOffline();
   } finally {
     setBusy(false);
   }
@@ -578,7 +684,10 @@ async function restore() {
     const data = await response.json();
     data.messages.forEach((m) => addFromServer(m, { includeCustomer: true }));
     // Still waiting on someone: say so again, since the notes aren't stored.
-    if (data.state === "waiting_on_owner") addWaitingNote();
+    if (data.state === "waiting_on_owner") {
+      addWaitingNote();
+      if (data.email_capture && !data.email_saved) addEmailForm();
+    }
     if (data.state === "human_handoff") {
       addNote("handedOff", { label: true, className: "status-note" });
       teamNoteShown = true;
@@ -604,15 +713,22 @@ function resetChat() {
   setBusy(false);
 }
 
+// A list, or {lang: [...]} for chips in the page's language.
+function suggestionList() {
+  const all = business.suggestions || [];
+  return Array.isArray(all) ? all : (all[lang] || all.en || []);
+}
+
 function renderSuggestions() {
-  suggestionsEl.replaceChildren(...business.suggestions.map((text) => {
+  const list = suggestionList();
+  suggestionsEl.replaceChildren(...list.map((text) => {
     const chip = el("button", { type: "button", className: "chip", textContent: text, dir: "auto" });
     if (ARABIC.test(text)) chip.classList.add("ar");
     chip.title = text; // long chips end in "…" on phones
     chip.addEventListener("click", () => send(text));
     return chip;
   }));
-  suggestionsEl.hidden = business.suggestions.length === 0;
+  suggestionsEl.hidden = list.length === 0;
   fitChips();
 }
 
@@ -651,10 +767,11 @@ async function loadBusiness() {
   renderSuggestions();
 }
 
-// A business shows the page in its own languages (its knowledge base's `languages:` line), as far
-// as the page has labels for them. The bot itself still replies in whatever language a customer writes.
+// A business shows the page in its own page languages (its knowledge base's `ui_languages:` line,
+// else `languages:`), as far as the page has labels for them. The bot itself still replies in
+// whatever language a customer writes, Arabic included.
 function applyBusinessLanguages() {
-  const offered = (business.languages || []).filter((code) => UI_LANGS.includes(code));
+  const offered = (business.ui_languages || business.languages || []).filter((code) => UI_LANGS.includes(code));
   const languages = offered.length ? offered : ["en"];
   document.querySelectorAll(".lang").forEach((button) => { button.hidden = !languages.includes(button.dataset.lang); });
   const toggle = document.querySelector(".lang-toggle");
@@ -675,7 +792,15 @@ document.querySelectorAll(".lang").forEach((button) => button.addEventListener("
   lang = button.dataset.lang;
   save(LANG_KEY, lang);
   applyLabels();
+  if (!Array.isArray(business.suggestions)) renderSuggestions();
 }));
+// The bubble hands over a message the customer typed before this chat was ready.
+if (EMBEDDED) {
+  window.addEventListener("message", (event) => {
+    if (event.source !== window.parent || !event.data || event.data.type !== "jawab:send") return;
+    if (typeof event.data.text === "string" && event.data.text.trim()) send(event.data.text.slice(0, 500));
+  });
+}
 // Catch up straight away when the customer comes back to the tab.
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && WAITING_STATES.includes(conversationState)) poll();
@@ -708,12 +833,14 @@ async function init() {
     await loadBusiness();
   } catch {
     addNote("notFound", { error: true, label: true });
+    tellBubble({ type: "jawab:failed" });
     return;
   }
   addWelcome();
   applyLabels();
   await restore();
   setBusy(false);
+  tellBubble({ type: "jawab:ready" });
 }
 
 init();

@@ -442,3 +442,23 @@ select:disabled { opacity: 0.6; }
 
 /* Inside the /try page, which shows the customer chat itself. */
 .framed #customer-link { display: none !important; }
+
+/* "Enter your owner key": asked once per device. */
+.notice p { margin: 0 0 12px; }
+.key-form { display: grid; gap: 8px; max-width: 460px; }
+.key-form label { font-weight: 600; }
+.key-row { display: flex; gap: 8px; }
+.key-input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+}
+.key-input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.key-form .muted { margin: 0; }
+.customer-line { margin: 4px 0 8px; }

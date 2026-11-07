@@ -49,7 +49,7 @@ def test_a_sandbox_is_a_private_copy_with_its_own_key():
     assert first["owner_key"] != second["owner_key"] and len(first["owner_key"]) >= 20
     assert first["owner_url"] == f"/owner/{first['slug']}?key={first['owner_key']}"
 
-    assert client.get(f"/api/b/{first['slug']}/public").json()["name"] == "The Plug Mini Market and Print Shop"
+    assert client.get(f"/api/b/{first['slug']}/public").json()["name"] == "The Plug"
     assert client.get(first["chat_url"]).status_code == 200
     # The other visitor's key doesn't open this inbox.
     wrong = client.get(f"/api/owner/{first['slug']}/escalations", headers={"X-Owner-Key": second["owner_key"]})

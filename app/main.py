@@ -10,34 +10,49 @@ in-memory database and ScriptedClients instead.
 - JAWAB_MODEL: the model (default gpt-6-luna), or `dry-run`.
 - DATABASE_URL: a Postgres URL for data that must last. Without it, a SQLite file (jawab.db),
   which on a free host vanishes on every restart: fine for the public demo, which resets itself.
-- PLUG_OWNER_KEY: the owner key of the seeded demo business (a long random string in production).
+- PLUG_OWNER_KEY: the owner key of the seeded business The Plug (a long random string in production).
+- JAWAB_MODE: `multi` (default: the public demo, with the landing page, sandboxes and onboarding)
+  or `single`: one business only (JAWAB_BUSINESS), nothing else served, and DATABASE_URL required.
+- JAWAB_DEPLOYMENT: this deployment's name in alert subjects, e.g. "Jawab demo".
+- JAWAB_CORS_ORIGINS / JAWAB_CORS_ORIGIN_REGEX: websites whose pages may call the API (the bubble
+  loader's /health ping), e.g. "https://theplug.cy".
+- RESEND_API_KEY, JAWAB_EMAIL_FROM: sending email. OWNER_ALERT_EMAIL, SHOP_ALERT_EMAILS: who gets it.
 """
 
 import html
 import json
 import logging
 import os
+import re
 import secrets
 import uuid
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import select
 from sqlalchemy.engine import Engine
 
-from app.db import init_db, make_engine, make_session_factory
+from app.db import Escalation, init_db, make_engine, make_session_factory
 from app.limits import RateLimiter
+from app.services import alerts as alerting
 from app.services import conversations as convs
 from app.services import onboarding, owner, sandbox
+from app.services import settings as biz_settings
 from app.services.businesses import BrainCache, get_business
+from app.services.mail import Mailer, NullMailer, ResendMailer
+from app.services.theme import accent_style
 from brain.llm import DryRunClient, LLMClient, make_client
+from brain.schema import Action, HandoffReason
 
 STATIC = Path(__file__).resolve().parent / "static"
-EMBED_SCRIPT = Path(__file__).resolve().parent / "embed.js"  # a template, so it isn't under static/
+LOADER_SCRIPT = STATIC / "jawab.js"  # the bubble; /embed.js serves it with a business's defaults filled in
 
 MAX_MESSAGE_CHARS = 500
 MAX_OWNER_TEXT_CHARS = 1000
@@ -57,8 +72,35 @@ SANDBOXES_PER_DAY = 400
 DAY = 24 * 3600
 DEFAULT_DATABASE_URL = "sqlite:///jawab.db"
 MODEL = "gpt-6-luna"
+# A chat reply should never hang: one model call gives up after this, with one SDK retry. The
+# onboarding draft (a whole KB) gets longer.
+MODEL_TIMEOUT_SECONDS = 45
+DRAFT_TIMEOUT_SECONDS = 300
+EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+TRANSCRIPT_IN_ALERT = 12  # messages in a complaint or lead email
+
+# Single-business mode serves none of the public demo: no landing page, sandboxes or onboarding,
+# so nobody can create a business or spend the business's key on anything but its own chat.
+DEMO_ONLY_PATHS = ("/try", "/start", "/demo/", "/api/sandbox", "/api/onboarding", "/api/public-stats",
+                   "/static/index.html", "/static/landing.", "/static/start.", "/static/try.",
+                   "/static/demo-the-plug.html", "/static/notfound.html")
 
 log = logging.getLogger("jawab")
+
+
+@dataclass
+class Deployment:
+    """What this server is: the public demo (multi) or one business's own chat (single)."""
+
+    mode: Literal["multi", "single"] = "multi"
+    business: str | None = None  # single mode: the one business's slug
+    name: str = "Jawab"  # alert subjects: "Jawab demo", "Jawab – The Plug"
+    cors_origins: list[str] = field(default_factory=list)
+    cors_origin_regex: str | None = None
+
+    @property
+    def single(self) -> bool:
+        return self.mode == "single"
 
 
 class ChatRequest(BaseModel):
@@ -66,6 +108,13 @@ class ChatRequest(BaseModel):
 
     conversation_id: uuid.UUID | None = None
     message: str = Field(min_length=1, max_length=MAX_MESSAGE_CHARS)
+    lang: Literal["en", "el", "ar"] | None = None  # the page's language, for Latin-script messages
+
+
+class EmailRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    email: str = Field(min_length=3, max_length=254, pattern=EMAIL.pattern)
 
 
 class OwnerText(BaseModel):
@@ -109,9 +158,9 @@ class OnboardingKB(BaseModel):
     kb_markdown: str = Field(min_length=1, max_length=MAX_KB_CHARS)
 
 
-def not_found_page() -> HTMLResponse:
-    """The styled 404 page, e.g. for a demo shop that went with a reset."""
-    return HTMLResponse((STATIC / "notfound.html").read_text(encoding="utf-8"), status_code=404)
+PLAIN_404 = ("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"robots\" "
+             "content=\"noindex\"><title>Not found</title></head><body style=\"font-family:system-ui;"
+             "padding:48px\"><h1>Not found</h1></body></html>")
 
 
 def visitor_id(request: Request) -> str:
@@ -131,19 +180,30 @@ def visitor_id(request: Request) -> str:
 
 def create_app(engine: Engine, client: LLMClient, limiter: RateLimiter | None = None,
                draft_client: LLMClient | None = None, onboarding_limiter: RateLimiter | None = None,
-               sandbox_limiter: RateLimiter | None = None) -> FastAPI:
+               sandbox_limiter: RateLimiter | None = None, deployment: Deployment | None = None,
+               mailer: Mailer | None = None, alert_config: alerting.AlertConfig | None = None) -> FastAPI:
     """Build the app. Creates missing tables and seeds missing businesses before serving.
 
     `draft_client` writes onboarding drafts (a whole KB, so a bigger token budget); defaults to `client`.
     `onboarding_limiter` counts new /start sessions and `sandbox_limiter` new sandboxes, on top of
-    `limiter`, which counts every model call.
+    `limiter`, which counts every model call. `mailer` sends the alerts (none without one).
     """
+    deployment = deployment or Deployment()
     session_factory = make_session_factory(engine)
     draft_client = draft_client or client
-    init_db(engine, session_factory)
+    init_db(engine, session_factory, deployment.business if deployment.single else None)
     brains = BrainCache(client)
+    alerts = alerting.Alerts(mailer or NullMailer(), alert_config or alerting.AlertConfig(deployment.name),
+                             session_factory)
 
     app = FastAPI(title="Jawab", docs_url=None, redoc_url=None, openapi_url=None)
+
+    def not_found_page() -> HTMLResponse:
+        """The styled 404 page, e.g. for a demo shop that went with a reset. Single-business mode
+        gets a plain one: the styled page links to the public demo."""
+        if deployment.single:
+            return HTMLResponse(PLAIN_404, status_code=404)
+        return HTMLResponse((STATIC / "notfound.html").read_text(encoding="utf-8"), status_code=404)
 
     @app.exception_handler(StarletteHTTPException)
     async def friendly_404(request: Request, exc: StarletteHTTPException):
@@ -154,17 +214,37 @@ def create_app(engine: Engine, client: LLMClient, limiter: RateLimiter | None = 
 
     @app.middleware("http")
     async def revalidate_pages(request: Request, call_next):
+        path = request.url.path
+        if deployment.single and (path == "/" or path.startswith(DEMO_ONLY_PATHS)):
+            if path.startswith("/api/"):
+                return JSONResponse({"detail": "Not Found"}, status_code=404)
+            return not_found_page()
         # Pages and their files are small: always revalidate, so a new version shows up at once.
         response = await call_next(request)
-        if not request.url.path.startswith("/api/"):
+        if not path.startswith("/api/"):
             response.headers.setdefault("Cache-Control", "no-cache")
         return response
 
+    if deployment.cors_origins or deployment.cors_origin_regex:
+        # The bubble loader runs on the business's own website and pings /health from there.
+        app.add_middleware(CORSMiddleware, allow_origins=deployment.cors_origins,
+                           allow_origin_regex=deployment.cors_origin_regex,
+                           allow_methods=["GET", "POST"], allow_headers=["Content-Type"])
+
+    def find_business(session, slug: str):
+        """A business by slug; in single-business mode only that one exists."""
+        if deployment.single and slug != deployment.business:
+            return None
+        return get_business(session, slug)
+
     def business_or_404(session, slug: str):
-        business = get_business(session, slug)
+        business = find_business(session, slug)
         if business is None:
             raise HTTPException(404, "Business not found.")
         return business
+
+    def base_url(request: Request) -> str:
+        return str(request.base_url).rstrip("/")
 
     # --- Pages ----------------------------------------------------------------------------------
 
@@ -175,19 +255,26 @@ def create_app(engine: Engine, client: LLMClient, limiter: RateLimiter | None = 
     @app.get("/b/{slug}", include_in_schema=False)
     def chat_page(slug: str):
         with session_factory() as session:
-            business = get_business(session, slug)
+            business = find_business(session, slug)
             if business is None:
                 return not_found_page()
-            name = business.name
-        # Link previews (WhatsApp) don't run JavaScript, so the business's name goes into the HTML.
+            name = biz_settings.display_name(business)
+            accent = biz_settings.effective(business)["accent"]
+        # Link previews (WhatsApp) don't run JavaScript, so the business's name goes into the HTML;
+        # so does its accent colour, so the page never flashes Jawab's own colour first.
         page = (STATIC / "chat.html").read_text(encoding="utf-8")
-        return HTMLResponse(page.replace("{{business_name}}", html.escape(name)))
+        page = page.replace("{{business_name}}", html.escape(name))
+        page = page.replace("<!--{{accent_style}}-->", accent_style(accent))
+        if accent:
+            page = page.replace('<meta name="theme-color" content="#0F766E">',
+                                f'<meta name="theme-color" content="{accent}">')
+        return HTMLResponse(page)
 
     @app.get("/owner/{slug}", include_in_schema=False)
     def owner_page(slug: str):
         # The page holds nothing secret; every API call it makes checks the key.
         with session_factory() as session:
-            if get_business(session, slug) is None:
+            if find_business(session, slug) is None:
                 return not_found_page()
         return FileResponse(STATIC / "owner.html")
 
@@ -205,16 +292,28 @@ def create_app(engine: Engine, client: LLMClient, limiter: RateLimiter | None = 
         # A stand-in shop website that carries the chat bubble, to show what customers would see.
         return FileResponse(STATIC / "demo-the-plug.html")
 
+    @app.get("/jawab.js", include_in_schema=False)
+    def loader_script() -> FileResponse:
+        """The bubble loader as a website should host it itself: configured by data- attributes."""
+        return FileResponse(LOADER_SCRIPT, media_type="text/javascript")
+
     @app.get("/embed.js", include_in_schema=False)
     def embed_script(request: Request, b: str = Query("", max_length=100)) -> Response:
+        """The same loader, served from here with one business's defaults filled in, for the
+        one-line snippet. It only appears once this server is awake; a self-hosted copy doesn't wait."""
         with session_factory() as session:
-            found = bool(b) and get_business(session, b) is not None
-        if not found:
-            return Response("/* Jawab: no business at this address. Check the b= part of the script link. */",
-                            status_code=404, media_type="text/javascript")
-        script = (EMBED_SCRIPT.read_text(encoding="utf-8")
-                  .replace('"__JAWAB_SLUG__"', json.dumps(b))
-                  .replace('"__JAWAB_BASE__"', json.dumps(str(request.base_url).rstrip("/"))))
+            business = find_business(session, b) if b else None
+            if business is None:
+                return Response("/* Jawab: no business at this address. Check the b= part of the script link. */",
+                                status_code=404, media_type="text/javascript")
+            settings = biz_settings.effective(business)
+            kb = brains.get_brain(business).kb
+            defaults = {"base": base_url(request), "business": b, "name": biz_settings.display_name(business),
+                        "accent": settings["accent"], "offline": settings["offline_message"],
+                        "languages": biz_settings.ui_languages(kb.metadata, kb.languages, settings["ui_languages"])}
+        # json.dumps escapes quotes; "</" can't end a script block inside a .js file anyway.
+        script = LOADER_SCRIPT.read_text(encoding="utf-8").replace(
+            "/*__JAWAB_DEFAULTS__*/{}", json.dumps(defaults, ensure_ascii=False).replace("</", "<\\/"))
         return Response(script, media_type="text/javascript")
 
     @app.get("/health")
@@ -227,8 +326,14 @@ def create_app(engine: Engine, client: LLMClient, limiter: RateLimiter | None = 
     def public_info(slug: str) -> dict:
         with session_factory() as session:
             business = business_or_404(session, slug)
-            return {"name": business.name, "suggestions": list(business.suggestions or []),
-                    "languages": brains.get_brain(business).kb.languages}
+            kb = brains.get_brain(business).kb
+            settings = biz_settings.effective(business)
+            return {"name": biz_settings.display_name(business), "suggestions": business.suggestions or [],
+                    "languages": kb.languages,  # the reply languages
+                    "ui_languages": biz_settings.ui_languages(kb.metadata, kb.languages, settings["ui_languages"]),
+                    "accent": settings["accent"],
+                    "offline_message": settings["offline_message"],
+                    "email_capture": settings["email_customers"]}
 
     @app.get("/api/public-stats/{slug}")
     def public_stats(slug: str) -> dict:
@@ -242,25 +347,32 @@ def create_app(engine: Engine, client: LLMClient, limiter: RateLimiter | None = 
                 "answered_without_owner_pct": stats["answered_by_bot_pct"],
                 "questions_learned": stats["questions_learned"]}
 
+    def transcript(session, business, conversation_id) -> list[tuple[str, str]]:
+        who = {"customer": "Customer", "bot": "Assistant", "staff": "Team"}
+        return [(who.get(m.role, m.role), m.text)
+                for m in owner.recent_messages(session, business, conversation_id, TRANSCRIPT_IN_ALERT)]
+
     # A plain `def`: brain.decide() waits on the model's API, and FastAPI runs plain functions in a
     # thread pool, so one slow call doesn't block other visitors.
     @app.post("/api/b/{slug}/chat")
-    def chat(slug: str, body: ChatRequest, request: Request) -> dict:
+    def chat(slug: str, body: ChatRequest, request: Request, background: BackgroundTasks):
         with session_factory() as session:
             business = business_or_404(session, slug)
             # Checked after validation, so only real messages count against the limits.
             if limiter and (refusal := limiter.check(visitor_id(request))):
                 raise HTTPException(429, refusal)
+            settings = biz_settings.effective(business)
 
             # Steps 1-2: the conversation and the customer's message, saved before the model runs.
             conversation = convs.find_or_create_conversation(session, business, body.conversation_id)
+            conversation.language = convs.detect_language(body.message, body.lang or conversation.language)
             customer_message = convs.add_message(session, business, conversation, "customer", body.message)
 
-            # Step 3: a person has taken over, so the bot stays out of it.
-            if conversation.state == convs.HUMAN_HANDOFF:
+            # Step 3: a person has taken over (or the chat ended in abuse), so the bot stays out of it.
+            if conversation.state in convs.QUIET:
                 session.commit()
                 return {"conversation_id": str(conversation.id), "state": conversation.state,
-                        "message": None, "panel": None}
+                        "message": None, "panel": None, "contacts": None, "ask_email": False}
 
             # Step 4: history from the database, then the brain (outside any open transaction).
             incoming = convs.build_incoming(session, business, conversation, customer_message)
@@ -268,24 +380,44 @@ def create_app(engine: Engine, client: LLMClient, limiter: RateLimiter | None = 
             session.commit()
             try:
                 result = brain.decide(incoming)
-            except Exception:
-                # Provider errors propagate from the brain (D-025). Log the details, show a plain message.
+            except Exception as error:
+                # Provider errors propagate from the brain (D-025): no credit, a quota, a timeout,
+                # the provider down. Log the details, show the business's offline message, and
+                # tell the owner (at most every 6 hours).
                 log.exception("brain.decide failed for business %s", business.slug)
-                raise HTTPException(503, "The assistant is unavailable right now. Please try again in a minute.")
+                background.add_task(alerts.offline, alerting.classify(error), f"{type(error).__name__}: {error}"[:300])
+                return JSONResponse({"detail": biz_settings.pick(settings["offline_message"], conversation.language),
+                                     "offline": True}, status_code=503)
 
             # Steps 5-6: save the reply and update the state and the owner's inbox.
             session.refresh(conversation)  # the owner may have changed it meanwhile
             decision = result.decision
-            bot_message = convs.record_decision(session, business, conversation, customer_message, decision)
+            bot_message, created = convs.record_decision(session, business, conversation, customer_message, decision)
             session.commit()
 
+            # One email per new event, sent after the response has gone out.
+            if created is not None and settings["alerts"]:
+                if decision.action is Action.ASK_OWNER:
+                    background.add_task(alerts.ask_owner, business.name, created.question, conversation.language,
+                                        customer_message.text, f"{base_url(request)}/owner/{business.slug}")
+                elif decision.handoff_reason in (HandoffReason.COMPLAINT, HandoffReason.LEAD):
+                    background.add_task(alerts.handoff, business.name, str(decision.handoff_reason),
+                                        decision.reasoning, transcript(session, business, conversation.id),
+                                        conversation.customer_email)
+
             # Step 7: only customer-safe fields leave the server.
+            contacts = biz_settings.pick(settings["contact_line"], conversation.language)
+            view = convs.customer_view(bot_message, contacts)
             return {
                 "conversation_id": str(conversation.id),
                 "state": conversation.state,
                 "message": {"id": bot_message.id, "role": "bot", "text": bot_message.text,
                             "action": bot_message.action},
                 "panel": convs.panel_for(decision, brain.kb),
+                "contacts": view.get("contacts"),
+                # "Leave your email and we'll send you the answer", under a question for the owner.
+                "ask_email": bool(settings["email_customers"] and decision.action is Action.ASK_OWNER
+                                  and not conversation.customer_email),
             }
 
     @app.get("/api/b/{slug}/conversations/{conversation_id}/messages")
@@ -295,11 +427,35 @@ def create_app(engine: Engine, client: LLMClient, limiter: RateLimiter | None = 
             conversation = convs.get_conversation(session, business, conversation_id)
             if conversation is None:
                 raise HTTPException(404, "Conversation not found.")
+            settings = biz_settings.effective(business)
+            contacts = biz_settings.pick(settings["contact_line"], conversation.language)
             rows = convs.messages_after(session, business, conversation, after)
             return {
                 "state": conversation.state,
-                "messages": [convs.customer_view(m) for m in rows],
+                "messages": [convs.customer_view(m, contacts) for m in rows],
+                "email_capture": bool(settings["email_customers"]),
+                "email_saved": conversation.customer_email is not None,
             }
+
+    @app.post("/api/b/{slug}/conversations/{conversation_id}/email")
+    def save_email(slug: str, conversation_id: uuid.UUID, body: EmailRequest) -> dict:
+        """The customer's email, for the owner's answer. Only on a business that emails its
+        customers, and only on a conversation that has asked the owner something."""
+        with session_factory() as session:
+            business = business_or_404(session, slug)
+            if not biz_settings.effective(business)["email_customers"]:
+                raise HTTPException(404, "Not available.")
+            conversation = convs.get_conversation(session, business, conversation_id)
+            if conversation is None:
+                raise HTTPException(404, "Conversation not found.")
+            asked = session.scalar(select(Escalation.id).where(
+                Escalation.business_id == business.id, Escalation.conversation_id == conversation.id,
+                Escalation.kind == Action.ASK_OWNER).limit(1))
+            if asked is None:
+                raise HTTPException(409, "There's no question waiting for an answer in this chat.")
+            conversation.customer_email = body.email
+            session.commit()
+        return {"ok": True}
 
     # --- Owner API ------------------------------------------------------------------------------
 
@@ -328,11 +484,23 @@ def create_app(engine: Engine, client: LLMClient, limiter: RateLimiter | None = 
 
     # Plain `def`s: the answer route waits on the model, which runs in FastAPI's thread pool.
     @app.post("/api/owner/{slug}/escalations/{escalation_id}/answer")
-    def owner_answer(escalation_id: int, body: OwnerText, access=Depends(owner_access)) -> dict:
+    def owner_answer(escalation_id: int, body: OwnerText, background: BackgroundTasks,
+                     access=Depends(owner_access)) -> dict:
         session, business = access
         result = owner_errors(lambda: owner.answer_ask_owner(session, business, escalation_id, body.text, client))
         if result.outcome.fallback_used:
             log.warning("learn call fell back for escalation %s: %s", escalation_id, result.outcome.problems)
+        settings = biz_settings.effective(business)
+        conversation = convs.get_conversation(session, business, result.escalation.conversation_id)
+        # What the customer saw in the chat: the bot's relay, or the owner's own words if the learn
+        # call failed. A deliberate "send nothing" (a null reply) emails nothing either.
+        sent = (result.outcome.result.reply_to_customer if result.outcome.result else body.text)
+        if settings["email_customers"] and conversation and conversation.customer_email and sent:
+            question = owner.customer_question(session, business, result.escalation) or result.escalation.question
+            background.add_task(alerts.answer_to_customer, biz_settings.display_name(business), conversation.customer_email,
+                                conversation.language, question, sent,
+                                biz_settings.pick(settings["contact_line"], conversation.language),
+                                settings["reply_to"])
         return {"escalation": owner.escalation_view(session, business, result.escalation)}
 
     @app.post("/api/owner/{slug}/escalations/{escalation_id}/reply")
@@ -417,7 +585,7 @@ def create_app(engine: Engine, client: LLMClient, limiter: RateLimiter | None = 
             raise HTTPException(422, "The knowledge base can't be published yet: " + "; ".join(e.problems))
 
     def links(request: Request, published: onboarding.Published) -> dict:
-        base = str(request.base_url).rstrip("/")
+        base = base_url(request)
         chat_url = f"{base}/b/{published.slug}"
         return {
             "slug": published.slug,
@@ -475,7 +643,7 @@ def create_app(engine: Engine, client: LLMClient, limiter: RateLimiter | None = 
     return app
 
 
-def choose_client(max_tokens: int = 16000, warn: bool = True) -> LLMClient:
+def choose_client(max_tokens: int = 16000, warn: bool = True, timeout: float = MODEL_TIMEOUT_SECONDS) -> LLMClient:
     """The shared model client. Dry run (free, always escalates) without OPENAI_API_KEY or when
     JAWAB_MODEL=dry-run."""
     model = os.environ.get("JAWAB_MODEL", MODEL)
@@ -490,7 +658,15 @@ def choose_client(max_tokens: int = 16000, warn: bool = True) -> LLMClient:
                     "  No model will be called; every customer message will escalate to the owner.",
                     banner)
         return DryRunClient()
-    # The SDK reads OPENAI_API_KEY (and OPENAI_BASE_URL, for a gateway) from the environment.
+    if model.startswith("gpt-"):
+        # Our own SDK client, for a timeout: the SDK's default waits up to 10 minutes. It reads
+        # OPENAI_API_KEY (and OPENAI_BASE_URL, for a gateway) from the environment.
+        import openai
+
+        from brain.llm import OpenAIClient
+
+        sdk = openai.OpenAI(timeout=timeout, max_retries=1)
+        return OpenAIClient(model, max_tokens=max_tokens, effort="medium", client=sdk)
     return make_client(model, effort="medium", max_tokens=max_tokens)
 
 
@@ -499,15 +675,47 @@ def env_int(name: str, default: int) -> int:
     return int(value) if value else default
 
 
+def deployment_from_env() -> Deployment:
+    mode = os.environ.get("JAWAB_MODE", "multi").strip() or "multi"
+    if mode not in ("multi", "single"):
+        raise RuntimeError(f"JAWAB_MODE must be 'multi' or 'single', not {mode!r}")
+    business = os.environ.get("JAWAB_BUSINESS", "").strip() or None
+    if mode == "single":
+        if not business:
+            raise RuntimeError("JAWAB_MODE=single needs JAWAB_BUSINESS, the one business's slug")
+        if not os.environ.get("DATABASE_URL"):
+            # A real business's learned answers must survive restarts: never a throwaway SQLite file
+            # by accident. (For a local try, set DATABASE_URL=sqlite:///plug.db on purpose.)
+            raise RuntimeError("JAWAB_MODE=single needs DATABASE_URL")
+    origins = [o.strip().rstrip("/") for o in os.environ.get("JAWAB_CORS_ORIGINS", "").split(",") if o.strip()]
+    return Deployment(mode=mode, business=business if mode == "single" else None,
+                      name=os.environ.get("JAWAB_DEPLOYMENT", "").strip() or "Jawab",
+                      cors_origins=origins, cors_origin_regex=os.environ.get("JAWAB_CORS_ORIGIN_REGEX") or None)
+
+
+def mailer_from_env() -> Mailer:
+    key = os.environ.get("RESEND_API_KEY", "").strip()
+    if not key:
+        return NullMailer()
+    # Until the sending domain is verified in Resend, its test sender only reaches the account's own address.
+    return ResendMailer(key, os.environ.get("JAWAB_EMAIL_FROM", "").strip() or "Jawab <onboarding@resend.dev>")
+
+
 def from_env() -> FastAPI:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    deployment = deployment_from_env()
     url = os.environ.get("DATABASE_URL") or DEFAULT_DATABASE_URL
     client = choose_client()
-    draft_client = choose_client(max_tokens=DRAFT_MAX_TOKENS, warn=False)
-    log.info("model client: %s; database: %s", client.model, url.split("://")[0])
+    draft_client = choose_client(max_tokens=DRAFT_MAX_TOKENS, warn=False, timeout=DRAFT_TIMEOUT_SECONDS)
+    log.info("mode: %s%s; model client: %s; database: %s", deployment.mode,
+             f" ({deployment.business})" if deployment.single else "", client.model, url.split("://")[0])
     limiter = RateLimiter(per_visitor=env_int("JAWAB_LIMIT_PER_HOUR", LIMIT_PER_VISITOR_PER_HOUR),
                           per_day=env_int("JAWAB_LIMIT_PER_DAY", LIMIT_PER_DAY))
     onboarding_limiter = RateLimiter(per_visitor=ONBOARDINGS_PER_VISITOR_PER_DAY,
                                      per_day=env_int("JAWAB_ONBOARDINGS_PER_DAY", ONBOARDINGS_PER_DAY), window=DAY)
     sandbox_limiter = RateLimiter(per_visitor=SANDBOXES_PER_VISITOR_PER_DAY, per_day=SANDBOXES_PER_DAY, window=DAY)
-    return create_app(make_engine(url), client, limiter, draft_client, onboarding_limiter, sandbox_limiter)
+    alert_config = alerting.AlertConfig(deployment=deployment.name,
+                                        owner=alerting.split_addresses(os.environ.get("OWNER_ALERT_EMAIL")),
+                                        shop=alerting.split_addresses(os.environ.get("SHOP_ALERT_EMAILS")))
+    return create_app(make_engine(url), client, limiter, draft_client, onboarding_limiter, sandbox_limiter,
+                      deployment=deployment, mailer=mailer_from_env(), alert_config=alert_config)

@@ -1,0 +1,57 @@
+# Render blueprint for The Plug's own Jawab: the chat bubble on theplug.cy. Same code as the public
+# demo (render.yaml), different settings: New -> Blueprint, pick this repo, and set the blueprint
+# file path to render.plug.yaml.
+#
+# - Single-business mode: only The Plug exists. No landing page, sandboxes or onboarding, so nobody
+#   can create a business or spend the shop's OpenAI key on anything but its own chat.
+# - Data lasts: DATABASE_URL is a Neon Postgres database (Frankfurt). The database is the source of
+#   truth for the live knowledge base: answers the owner saves go there. kb/the-plug.md is only the
+#   seed used on the very first start.
+# - Free plan on purpose: it sleeps after 15 idle minutes and takes about a minute to wake; the
+#   website's bubble loader hides that. Render gives 750 free hours a month per workspace, shared
+#   with the demo; if they run out, every free service is suspended until the month ends. Moving to
+#   a paid instance is only a plan change here (plan: starter), no code change.
+#
+# Secrets and private addresses are never in this file (sync: false): set them in the dashboard.
+
+services:
+  - type: web
+    name: jawab-the-plug
+    runtime: python
+    plan: free
+    region: frankfurt # the closest region to Cyprus, next to the Neon database
+    buildCommand: uv sync --frozen --no-dev
+    startCommand: uv run --no-sync uvicorn app.main:from_env --factory --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips "*"
+    healthCheckPath: /health
+    envVars:
+      - key: JAWAB_MODE
+        value: single
+      - key: JAWAB_BUSINESS
+        value: the-plug
+      - key: JAWAB_DEPLOYMENT
+        value: Jawab – The Plug
+      - key: JAWAB_MODEL
+        value: gpt-6-luna
+      - key: OPENAI_API_KEY # the "plug-jawab-prod" key, project "The Plug – Jawab"
+        sync: false
+      - key: DATABASE_URL # Neon, project plug-jawab
+        sync: false
+      - key: PLUG_OWNER_KEY # the inbox key: asked for once per device
+        generateValue: true
+      # Email (Resend). Until theplug.cy is verified in Resend, its test sender only reaches the
+      # Resend account's own address; then set "The Plug <no-reply@theplug.cy>".
+      - key: RESEND_API_KEY
+        sync: false
+      - key: JAWAB_EMAIL_FROM
+        value: The Plug <onboarding@resend.dev>
+      - key: OWNER_ALERT_EMAIL # questions the bot can't answer, and offline alerts
+        sync: false
+      - key: SHOP_ALERT_EMAILS # complaints and leads: the shop's Gmail and the manager, comma-separated
+        sync: false
+      # The website's pages may ping /health to wake the server (the bubble works without it too).
+      - key: JAWAB_CORS_ORIGINS
+        value: https://theplug.cy,https://www.theplug.cy
+      - key: JAWAB_CORS_ORIGIN_REGEX # Cloudflare Pages: the project's URL and its preview URLs
+        value: https://([a-z0-9-]+\.)?the-?plug[a-z0-9-]*\.pages\.dev
+      - key: JAWAB_LIMIT_PER_DAY # model calls a day, all visitors together (the OpenAI cap is the backstop)
+        value: "500"

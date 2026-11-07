@@ -17,6 +17,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db import SEED_BUSINESSES, Business, Conversation, Escalation, KBChange, Message, new_owner_key, utcnow
+from app.services.settings import seed_settings
 from brain.kb import parse_kb
 
 LIFETIME = timedelta(hours=24)
@@ -50,6 +51,8 @@ def create(session_factory: sessionmaker[Session], seed_slug: str = "the-plug") 
             kb_version=1,
             suggestions=list(seed["suggestions"]),
             sandbox_of=seed_slug,
+            demo=True,  # never live: no real contacts, emails or alerts
+            settings=seed_settings(seed, demo=True),
         )
         session.add(business)
         session.flush()

@@ -1,8 +1,24 @@
-// The owner dashboard: /owner/{slug}?key=... (spec section 7).
-// The key comes from the page's URL and goes to the API in the X-Owner-Key header.
+// The owner dashboard: /owner/{slug} (spec section 7).
+// The key goes to the API in the X-Owner-Key header. It comes from the page's URL (?key=..., as the
+// demo's links give it) or is typed in once; either way it's remembered on this device and taken
+// out of the address bar, so alert emails can link to /owner/{slug} without ever carrying the key.
 
 const SLUG = decodeURIComponent(location.pathname.split("/")[2] || "");
-const KEY = new URLSearchParams(location.search).get("key") || "";
+const KEY_STORE = `jawab:owner:${SLUG}`;
+function loadKey() {
+  try { return localStorage.getItem(KEY_STORE) || ""; } catch { return ""; }
+}
+function storeKey(value) {
+  try { if (value) localStorage.setItem(KEY_STORE, value); else localStorage.removeItem(KEY_STORE); } catch { /* private mode */ }
+}
+const URL_KEY = new URLSearchParams(location.search).get("key") || "";
+let KEY = URL_KEY || loadKey();
+if (URL_KEY) {
+  storeKey(URL_KEY);
+  const url = new URL(location.href);
+  url.searchParams.delete("key");
+  history.replaceState(null, "", url.pathname + url.search + url.hash);
+}
 const API = `/api/owner/${encodeURIComponent(SLUG)}`;
 // ?frame=1: inside the /try page, which has its own Jawab bar and shows the customer chat itself.
 if (new URLSearchParams(location.search).get("frame") === "1") {
@@ -15,6 +31,9 @@ const ARABIC = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/;
 
 const ACTION_LABELS = { answer: "Answer", ask_owner: "Ask owner", handoff: "Hand off" };
 const KIND_LABELS = { ask_owner: "Question for you", handoff: "Handed off to you" };
+// Why the assistant handed off (the engine's handoff_reason). Complaints and leads were also emailed to the shop.
+const REASON_LABELS = { complaint: "Complaint", lead: "Lead", other: "Needs a person", abuse: "Abuse" };
+const LANGUAGE_NAMES = { en: "English", el: "Greek", ar: "Arabic" };
 
 const cards = new Map(); // escalation id -> {node, status, decision, signature, busy}
 let business = { name: "" };
@@ -107,7 +126,8 @@ async function api(path, { method = "GET", body } = {}) {
   if (body !== undefined) headers["Content-Type"] = "application/json";
   const response = await fetch(`${API}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
   if (response.status === 403) {
-    stop("This owner link isn't valid. Open the dashboard with the full owner link, including its key.");
+    storeKey(null);
+    askForKey("That key didn't work. Check it and try again.");
     throw new ApiError(403, "Wrong owner key.");
   }
   if (!response.ok) {
@@ -125,10 +145,34 @@ async function api(path, { method = "GET", body } = {}) {
 function stop(message) {
   stopped = true;
   clearInterval(pollTimer);
+  pollTimer = null;
   $("app").hidden = true;
   const notice = $("notice");
   notice.textContent = message;
   notice.hidden = false;
+}
+
+// No key yet on this device (or a wrong one): ask once, then remember it here.
+function askForKey(problem = "") {
+  stop("");
+  const notice = $("notice");
+  const field = el("input", { type: "password", id: "owner-key", autocomplete: "current-password", required: true,
+    spellcheck: false, className: "key-input" });
+  const form = el("form", { className: "key-form" },
+    el("label", { htmlFor: "owner-key", textContent: "Owner key" }),
+    el("div", { className: "key-row" }, field, el("button", { type: "submit", className: "primary", textContent: "Open inbox" })),
+    el("p", { className: "muted small", textContent: "Asked once: this device remembers it. Anyone with the key can answer your customers, so keep it private." }));
+  notice.replaceChildren(el("p", { textContent: problem || "Enter your owner key to open the inbox." }), form);
+  notice.setAttribute("role", problem ? "alert" : "region");
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    KEY = field.value.trim();
+    if (!KEY) return;
+    storeKey(KEY);
+    notice.hidden = true;
+    init();
+  });
+  field.focus();
 }
 
 // --- Inbox ----------------------------------------------------------------------------------------
@@ -151,7 +195,7 @@ function renderTranscript(messages) {
 
 function signature(e) {
   const last = e.messages[e.messages.length - 1];
-  return `${e.status}|${e.learn_decision}|${e.question}|${e.conversation_state}|${last ? last.id : 0}`;
+  return `${e.status}|${e.learn_decision}|${e.question}|${e.conversation_state}|${e.customer_email}|${last ? last.id : 0}`;
 }
 
 function cardHeader(e) {
@@ -160,11 +204,26 @@ function cardHeader(e) {
       textContent: e.status === "closed" ? "Given back to the bot"
         : e.learn_decision === "saved" || e.learn_decision === "edited" ? "Learned"
           : e.learn_decision === "once" ? "Answered" : "Answered · decide below" });
+  const title = e.kind === "handoff" && REASON_LABELS[e.reason]
+    ? `${KIND_LABELS.handoff} · ${REASON_LABELS[e.reason]}` : KIND_LABELS[e.kind] || e.kind;
+  const statusChip = e.reason === "abuse" && e.status === "closed"
+    ? el("span", { className: "status-chip", textContent: "Ended: the bot said goodbye" }) : status;
   return el("header", { className: "card-header" },
     badge(e.kind, e.kind === "ask_owner" ? "Ask owner" : "Hand off"),
-    el("span", { className: "card-title", textContent: KIND_LABELS[e.kind] || e.kind }),
-    status,
+    el("span", { className: "card-title", textContent: title }),
+    statusChip,
     el("time", { className: "card-time", dateTime: e.created_at || "", textContent: formatTime(e.created_at) }));
+}
+
+// The customer's language, and the email they left (their answer goes there too).
+function customerLine(e) {
+  const parts = [];
+  if (e.customer_language) parts.push(`Writes in ${LANGUAGE_NAMES[e.customer_language] || e.customer_language}`);
+  if (e.customer_email) {
+    parts.push(e.kind === "ask_owner" && e.status === "pending"
+      ? `Left an email: ${e.customer_email} (your answer is emailed there too)` : `Email: ${e.customer_email}`);
+  }
+  return parts.length ? el("p", { className: "muted small customer-line", dir: "auto", textContent: parts.join(" · ") }) : null;
 }
 
 function questionBlock(e) {
@@ -481,7 +540,7 @@ function buildCard(e) {
     node.append(cardHeader(e), decidedBlock(e), details);
     return node;
   }
-  node.append(cardHeader(e), transcript);
+  node.append(cardHeader(e), customerLine(e) || "", transcript);
 
   if (e.kind === "ask_owner") {
     node.append(questionBlock(e));
@@ -489,6 +548,8 @@ function buildCard(e) {
     else node.append(relayBlock(e), learningBlock(e));
   } else if (e.status === "pending") {
     node.append(handoffPending(e));
+  } else if (e.reason === "abuse") {
+    node.append(el("p", { className: "muted small", textContent: "Nobody was alerted, and the bot won't reply in this chat again." }));
   } else {
     node.append(el("p", { className: "muted small", textContent: "The bot is answering this customer again." }));
   }
@@ -728,9 +789,10 @@ document.addEventListener("visibilitychange", () => {
 
 async function init() {
   if (!KEY) {
-    stop("This page needs your owner link, which ends in ?key=… Open the dashboard with the full link you were given.");
+    askForKey();
     return;
   }
+  stopped = false;
   try {
     const data = await api("/knowledge");
     business = { name: data.name };

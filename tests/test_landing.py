@@ -62,7 +62,8 @@ def test_landing_page_has_both_buttons_and_a_link_preview(make):
 def test_chat_page_preview_names_the_business_safely(make):
     client, sessions = make()
     with sessions() as session:
-        session.execute(update(Business).values(name='Tom & "Jerry" <b>'))
+        tricky = 'Tom & "Jerry" <b>'
+        session.execute(update(Business).values(name=tricky, settings={"display_name": tricky}))
         session.commit()
     page = client.get("/b/the-plug").text
     assert "{{business_name}}" not in page

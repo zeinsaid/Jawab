@@ -7,7 +7,10 @@
 # itself. A real deployment sets DATABASE_URL to a Postgres database (e.g. Neon) and keeps its data.
 #
 # Secrets are never in this file: Render asks for OPENAI_API_KEY when the blueprint is first
-# applied (sync: false), and generates PLUG_OWNER_KEY.
+# applied (sync: false), and generates PLUG_OWNER_KEY. Values added later with sync: false
+# (RESEND_API_KEY, OWNER_ALERT_EMAIL) are set by hand in the service's Environment tab.
+#
+# The Plug's real deployment is a separate blueprint: render.plug.yaml.
 
 services:
   - type: web
@@ -27,3 +30,14 @@ services:
         generateValue: true
       - key: JAWAB_MODEL
         value: gpt-6-luna
+      # Offline alerts: if the model can't be reached (e.g. the shared OpenAI credit ran out),
+      # email the owner at most every 6 hours. The demo sends no other email.
+      - key: JAWAB_DEPLOYMENT
+        value: Jawab demo
+      - key: RESEND_API_KEY
+        sync: false
+      - key: OWNER_ALERT_EMAIL
+        sync: false
+      # Resend's test sender until theplug.cy is verified there; then "Jawab demo <no-reply@theplug.cy>".
+      - key: JAWAB_EMAIL_FROM
+        value: Jawab demo <onboarding@resend.dev>

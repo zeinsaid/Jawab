@@ -4,6 +4,7 @@ The history the brain sees always comes from the database, so a customer can't f
 turns. Internal entries and the model's reasoning are stored here but never returned to customers.
 """
 
+import re
 import uuid
 
 from sqlalchemy import select
@@ -11,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.db import Business, Conversation, Escalation, Message, utcnow
 from brain.kb import KnowledgeBase
-from brain.schema import Action, BrainDecision, IncomingMessage, Role, Turn
+from brain.schema import Action, BrainDecision, HandoffReason, IncomingMessage, Role, Turn
 
 HISTORY_MESSAGES = 40  # earlier messages loaded for the brain (it reads the last 10 itself, D-023)
 SUMMARY_CHARS = 160  # length of a handoff's one-line summary
@@ -20,6 +21,28 @@ BOT_ACTIVE = "bot_active"
 WAITING_ON_OWNER = "waiting_on_owner"
 HUMAN_HANDOFF = "human_handoff"
 CLOSED = "closed"
+ENDED = "ended"  # an abuse goodbye: the bot stays silent and nobody is waiting to reply
+QUIET = (HUMAN_HANDOFF, ENDED)  # states where a new customer message gets no bot reply
+
+GREEK = re.compile(r"[Ͱ-Ͽἀ-῿]")
+ARABIC = re.compile(r"[؀-ۿݐ-ݿࢠ-ࣿ]")
+LANGS = ("en", "el", "ar")
+
+
+def detect_language(text: str, page_language: str | None) -> str:
+    """The customer's language, for the texts Jawab adds itself (offline message, contact line,
+    the answer email). The script decides when it can; Latin text (English, Greeklish, Arabizi)
+    takes the page's language, which the customer chose."""
+    if ARABIC.search(text):
+        return "ar"
+    if GREEK.search(text):
+        return "el"
+    return page_language if page_language in LANGS else "en"
+
+
+def needs_contacts(action: str | None, reason: str | None) -> bool:
+    """Replies that need a person end with the shop's contacts; an abuse goodbye gets nothing."""
+    return action == Action.ASK_OWNER or (action == Action.HANDOFF and reason != HandoffReason.ABUSE)
 
 
 def get_conversation(session: Session, business: Business, conversation_id: uuid.UUID) -> Conversation | None:
@@ -89,12 +112,18 @@ def one_line(text: str, limit: int = SUMMARY_CHARS) -> str:
 
 
 def record_decision(session: Session, business: Business, conversation: Conversation,
-                    customer_message: Message, decision: BrainDecision) -> Message:
-    """Save the bot's reply, then update the conversation state and the owner's inbox (steps 5-6)."""
+                    customer_message: Message, decision: BrainDecision) -> tuple[Message, Escalation | None]:
+    """Save the bot's reply, then update the conversation state and the owner's inbox (steps 5-6).
+
+    Returns the bot message and the escalation this created, if any (an ask_owner that only
+    restates a pending question creates none), so the caller can send one alert per new event."""
+    reason = str(decision.handoff_reason) if decision.handoff_reason else None
     bot_message = add_message(
         session, business, conversation, Role.BOT, decision.reply or "",
         action=str(decision.action), cited_entries=list(decision.cited_entries), reasoning=decision.reasoning,
+        handoff_reason=reason,
     )
+    created = None
 
     if decision.action is Action.ANSWER:
         # A new answerable question while waiting on the owner keeps the chat waiting.
@@ -111,18 +140,24 @@ def record_decision(session: Session, business: Business, conversation: Conversa
         if pending:
             pending.question = decision.question_for_owner  # the prompt restates the whole request
         else:
-            session.add(Escalation(
+            created = Escalation(
                 business_id=business.id, conversation_id=conversation.id, message_id=bot_message.id,
                 kind=str(Action.ASK_OWNER), question=decision.question_for_owner, status="pending",
-            ))
+            )
     elif decision.action is Action.HANDOFF:
-        conversation.state = HUMAN_HANDOFF
-        session.add(Escalation(
+        # The bot stays out of it from now on. Abuse is kept for the record but closed at once:
+        # nobody needs to act on it, and the troll's next messages cost no model call.
+        abuse = decision.handoff_reason is HandoffReason.ABUSE
+        conversation.state = ENDED if abuse else HUMAN_HANDOFF
+        created = Escalation(
             business_id=business.id, conversation_id=conversation.id, message_id=bot_message.id,
-            kind=str(Action.HANDOFF), question=one_line(customer_message.text), status="pending",
-        ))
+            kind=str(Action.HANDOFF), reason=reason, question=one_line(customer_message.text),
+            status="closed" if abuse else "pending", answered_at=utcnow() if abuse else None,
+        )
+    if created is not None:
+        session.add(created)
     session.flush()
-    return bot_message
+    return bot_message, created
 
 
 def panel_for(decision: BrainDecision, kb: KnowledgeBase) -> dict:
@@ -144,11 +179,16 @@ def is_relayed(message: Message) -> bool:
     return message.role == Role.BOT and message.action == Action.ANSWER and not message.cited_entries
 
 
-def customer_view(message: Message) -> dict:
-    """A message as the customer page may see it. `relayed` appears only when true."""
+def customer_view(message: Message, contact_line: str | None = None) -> dict:
+    """A message as the customer page may see it. `relayed` appears only when true, and
+    `contacts` (the business's contact line, in the customer's language) only under replies that
+    need a person. The contact line isn't part of the stored text, so the bot never sees it in
+    the history and never learns to copy it."""
     view = {"id": message.id, "role": message.role, "text": message.text}
     if is_relayed(message):
         view["relayed"] = True
+    if contact_line and message.role == Role.BOT and needs_contacts(message.action, message.handoff_reason):
+        view["contacts"] = contact_line
     return view
 
 

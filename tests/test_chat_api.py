@@ -51,7 +51,8 @@ def test_chat_answer_returns_only_customer_safe_fields(make):
 
     assert response.status_code == 200
     data = response.json()
-    assert set(data) == {"conversation_id", "state", "message", "panel"}
+    assert set(data) == {"conversation_id", "state", "message", "panel", "contacts", "ask_email"}
+    assert data["contacts"] is None and data["ask_email"] is False  # an answer needs neither
     assert data["state"] == "bot_active"
     assert set(data["message"]) == {"id", "role", "text", "action"}
     assert data["message"]["role"] == "bot"
@@ -120,7 +121,7 @@ def test_handoff_stops_the_bot(make):
     later = client.post(CHAT, json={"conversation_id": first["conversation_id"], "message": "Hello??"})
     assert later.status_code == 200
     assert later.json() == {"conversation_id": first["conversation_id"], "state": "human_handoff",
-                            "message": None, "panel": None}
+                            "message": None, "panel": None, "contacts": None, "ask_email": False}
     assert len(scripted.calls) == 1  # the second message never reached the model
 
     with sessions() as session:
@@ -151,7 +152,7 @@ def test_validation_unknown_business_and_rate_limit(make):
 def test_public_info_pages_and_seeding_is_idempotent(make):
     client, _, sessions = make()
     info = client.get("/api/b/the-plug/public").json()
-    assert info["name"] == "The Plug Mini Market and Print Shop"
+    assert info["name"] == "The Plug"  # the display name; the KB keeps the full one
     assert len(info["suggestions"]) == 5
     assert client.get("/b/the-plug").status_code == 200
     assert client.get("/health").json() == {"ok": True, "model": "scripted"}

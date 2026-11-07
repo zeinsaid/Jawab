@@ -301,8 +301,10 @@ def test_slugs_are_unique_and_starter_questions_fall_back_to_none(make):
     assert links["slug"] == "noor-tailoring-2"
     with sessions() as session:
         assert session.scalar(select(Business).where(Business.slug == "noor-tailoring-2")).suggestions == []
-    assert client.get("/api/b/noor-tailoring-2/public").json() == {"name": "Noor Tailoring", "suggestions": [],
-                                                                   "languages": ["en", "el", "ar"]}
+    public = client.get("/api/b/noor-tailoring-2/public").json()
+    assert {k: public[k] for k in ("name", "suggestions", "languages", "ui_languages", "accent", "email_capture")} == {
+        "name": "Noor Tailoring", "suggestions": [], "languages": ["en", "el", "ar"],
+        "ui_languages": ["en", "el", "ar"], "accent": None, "email_capture": False}
 
 
 def test_the_slug_follows_the_typed_name(make):

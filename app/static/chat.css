@@ -271,6 +271,48 @@ h1 {
   color: var(--accent-strong);
 }
 .message.note.error { color: var(--error); }
+
+/* The business's contact line under replies that need a person, and its offline message. */
+.message.bot .contacts {
+  display: block;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+.message.bot.offline { border-inline-start: 3px solid var(--ask_owner); }
+
+/* "Leave your email and we'll send you the answer" */
+.message.note.email-capture {
+  align-self: stretch;
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  text-align: start;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+.message.note.email-capture.saved { align-self: center; border: 0; background: none; color: var(--muted); text-align: center; padding: 2px 10px; }
+.email-row { display: flex; gap: 8px; }
+.email-row input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 16px; /* no zoom on iOS */
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+}
+.email-row input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.email-status { margin: 0; min-height: 0; color: var(--muted); }
+.email-status:empty { display: none; }
+.email-status.error { color: var(--error); }
 .message.bot.selected { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .why {
