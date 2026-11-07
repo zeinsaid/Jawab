@@ -29,6 +29,8 @@ def decision(**overrides) -> str:
         "cited_entries": [PUBLIC_ENTRY, INTERNAL_ENTRY],
         "question_for_owner": None,
     }
+    if "handoff_reason" not in overrides:
+        overrides["handoff_reason"] = "other" if overrides.get("action") == "handoff" else None
     return json.dumps({**fields, **overrides})
 
 

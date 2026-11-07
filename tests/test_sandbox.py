@@ -17,6 +17,7 @@ def ask() -> str:
     return json.dumps({
         "reasoning": "The KB doesn't cover this.",
         "action": "ask_owner",
+        "handoff_reason": None,
         "reply": "Let me check with the team and get back to you.",
         "cited_entries": [],
         "question_for_owner": "Are we open on Christmas Day?",

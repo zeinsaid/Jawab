@@ -15,7 +15,8 @@ from brain.llm import ScriptedClient
 
 
 def decision(action="answer", cited=("shop-hours",)) -> str:
-    return json.dumps({"reasoning": "SECRET", "action": action, "reply": "We're open 24/7.",
+    return json.dumps({"reasoning": "SECRET", "action": action,
+                       "handoff_reason": "other" if action == "handoff" else None, "reply": "We're open 24/7.",
                        "cited_entries": list(cited),
                        "question_for_owner": "Christmas hours?" if action == "ask_owner" else None})
 

@@ -70,6 +70,8 @@ def starters(*questions) -> str:
 def decision(**overrides) -> str:
     fields = {"reasoning": "Not in the KB.", "action": "ask_owner", "reply": "Let me check with Noor.",
               "cited_entries": [], "question_for_owner": "Do we do embroidery?"}
+    if "handoff_reason" not in overrides:
+        overrides["handoff_reason"] = "other" if overrides.get("action") == "handoff" else None
     return json.dumps({**fields, **overrides})
 
 

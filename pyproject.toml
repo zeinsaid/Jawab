@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-shop-assistant = { git = "https://github.com/zeinsaid/Shop-Assistant", tag = "v1.0.0" }
+shop-assistant = { git = "https://github.com/zeinsaid/Shop-Assistant", tag = "v1.1.0" }
 
 [dependency-groups]
 dev = [

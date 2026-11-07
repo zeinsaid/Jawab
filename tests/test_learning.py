@@ -24,6 +24,7 @@ def ask(question="Are we open on Christmas Day (25 December)?") -> str:
     return json.dumps({
         "reasoning": "The KB doesn't cover this.",
         "action": "ask_owner",
+        "handoff_reason": None,
         "reply": "دعني أتحقق من الفريق وأعود إليك.",
         "cited_entries": [],
         "question_for_owner": question,
@@ -34,6 +35,7 @@ def answer(cited) -> str:
     return json.dumps({
         "reasoning": "A learned entry covers it.",
         "action": "answer",
+        "handoff_reason": None,
         "reply": "We're closed on 25 December and open 24/7 again from the 26th.",
         "cited_entries": cited,
         "question_for_owner": None,
