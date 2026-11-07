@@ -14,7 +14,7 @@
 
 services:
   - type: web
-    name: jawab
+    name: jawab-demo
     runtime: python
     plan: free
     region: frankfurt # the closest region to both Cyprus and the Gulf
