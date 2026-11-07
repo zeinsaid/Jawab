@@ -48,7 +48,7 @@ Jawab installs the engine as a Python package, pinned to a release tag:
 dependencies = ["shop-assistant[openai]"]
 
 [tool.uv.sources]
-shop-assistant = { git = "https://github.com/zeinsaid/Shop-Assistant", tag = "v1.0.0" }
+shop-assistant = { git = "https://github.com/zeinsaid/Shop-Assistant", tag = "v1.1.0" }
 ```
 
 and uses it like any library:
@@ -59,7 +59,44 @@ from brain.learn import Learner      # owner's answer -> reply for the customer 
 from onboarding.interview import Interview
 ```
 
-Building Jawab improved the engine, and those changes went back into it: Arabic support, "learned entries win over ask-the-owner rules", the learning call, a quick five-minute interview, and language notes that switch on per business (a Greek shop gets the Greeklish notes, an Arabic one the Arabizi notes).
+Building Jawab improved the engine, and those changes went back into it: Arabic support, "learned entries win over ask-the-owner rules", the learning call, a quick five-minute interview, and language notes that switch on per business (a Greek shop gets the Greeklish notes, an Arabic one the Arabizi notes). Since v1.1.0 every handoff also says **why** (`abuse`, `complaint`, `lead` or `other`), and Jawab routes on it: a complaint or a lead emails the shop, a troll gets a polite goodbye and nobody is bothered.
+
+## Running it for a real business
+
+The same code runs two ways. The public demo is one deployment; The Plug's own chat, on its new website, is another.
+
+| | Public demo (`render.yaml`) | A business's own (`render.plug.yaml`) |
+|---|---|---|
+| Mode | `JAWAB_MODE=multi` (default) | `JAWAB_MODE=single`, `JAWAB_BUSINESS=the-plug` |
+| Pages | landing, `/try` sandboxes, `/start` onboarding, demo shop | only that business's chat and inbox; everything else is a 404 |
+| Database | SQLite on the free server's disk, wiped on restart (on purpose) | Postgres (`DATABASE_URL`, e.g. Neon); required in this mode |
+| Email | only the offline alert | alerts, and answers to customers |
+
+**Single-business mode** is what lets a business run Jawab on its own key safely: nobody can create a business, open a sandbox or start an onboarding, so the key is only spent on that business's own chat. Every lookup is limited to the one business.
+
+**Per-business settings** (`app/services/settings.py`) sit next to the knowledge base: the short display name, an accent colour for the bubble and the chat page (made readable automatically: text on The Plug's neon `#F920EB` is darkened just enough to pass WCAG AA), the message shown when the chat is offline, a contact line under replies that need a person ("For anything urgent, call..."), a reply-to address, and switches for alerts and for emailing customers. Seeded businesses get them from their seed, and they're rewritten on every start: settings are configuration. On the public demo every demo copy gets a safe overlay instead: no real contacts, no emails to customers, no alerts. Otherwise a visitor could type any address as "their" email, answer as the sandbox owner, and make the shop's domain send whatever they liked.
+
+**Page languages vs reply languages.** A knowledge base's `languages:` line says which languages the bot handles (it turns on the engine's notes for Greeklish or Arabizi); a `ui_languages:` line says which ones the chat page's toggle offers. The Plug's website is English and Greek, so its toggle is `en, el`, but an Arabic message still gets an Arabic answer.
+
+**Alerts** (Resend, over HTTPS, since free hosts block SMTP; `app/services/alerts.py`):
+
+| Event | Who's emailed |
+|---|---|
+| `ask_owner` (the bot doesn't know) | the owner (`OWNER_ALERT_EMAIL`): the question, the customer's language, a link to the inbox (never the key) |
+| `handoff`, reason `complaint` or `lead` | the shop (`SHOP_ALERT_EMAILS`): a short summary, the conversation, the customer's email if given |
+| `handoff`, reason `other` or `abuse` | nobody (`other` stays in the inbox; `abuse` ends the chat) |
+| the model can't be reached | the owner, at most every 6 hours per deployment, saying why: out of credit, rate-limited, provider down, or other |
+| the owner answers | the customer, in their language, if they left an email |
+
+Recipients come from env vars, never from the repo. One email per event.
+
+**The customer side.** After a question goes to the owner, the chat offers *"Leave your email and we'll send you the answer"*. Every reply that needs a person ends with the business's contact line, except an abuse goodbye. If the model call fails (no credit, quota, timeout, provider down) or the server can't be reached, the chat shows the business's own offline message in the customer's language: never an error or a broken bubble.
+
+**The website bubble** is a small loader the website hosts itself ([`docs/EMBED.md`](docs/EMBED.md)), so it appears at once even while a free server sleeps. It pings `/health` on page load to wake the server, shows a local greeting in the page's `<html lang>`, and hands the customer's first message to the real chat once it's ready, or shows the offline message after about a minute. The conversation ID lives in the website's own storage, so a returning visitor finds the owner's answer waiting.
+
+**Where the knowledge lives.** Where a business runs for real, **its database is the source of truth** for its live knowledge base: the answers the owner saves go there. `kb/the-plug.md` in this repo is only the seed used on the first start, and the copy in the engine's repo is an evaluation fixture. Nobody keeps the three in sync.
+
+**Hosting.** Both run on Render's free plan, which sleeps after 15 idle minutes and gives 750 free hours a month per workspace, shared by all free services (if they run out, every free service stops until the month ends). Moving a deployment to a paid instance is only a plan change in its blueprint, no code change.
 
 ## How it was built
 
@@ -81,16 +118,17 @@ uv run uvicorn app.main:from_env --factory --reload
 uv run --env-file .env uvicorn app.main:from_env --factory
 ```
 
-Copy `.env.example` to `.env` for the settings: `OPENAI_API_KEY`, and optionally `DATABASE_URL` (any Postgres database, for data that must last) and `PLUG_OWNER_KEY`.
+Copy `.env.example` to `.env` for the settings: `OPENAI_API_KEY`, and optionally `DATABASE_URL` (any Postgres database, for data that must last), `PLUG_OWNER_KEY`, the single-business mode, CORS and the email settings. Every one is listed in `.env.example` and at the top of `app/main.py`.
 
 | Page | What it is |
 |---|---|
 | `/` | Landing page (English / Greek / Arabic) |
 | `/try` | The public demo: your own sandbox, customer chat and owner inbox side by side |
 | `/b/{slug}` | A business's customer chat (`?panel=1` adds the "Behind the reply" panel) |
-| `/owner/{slug}?key=...` | The owner's inbox, knowledge and share links |
+| `/owner/{slug}` | The owner's inbox, knowledge and share links (asks for the owner key once per device) |
 | `/start` | Onboarding a new business |
-| `/embed.js?b={slug}` | The website chat bubble, e.g. on [a demo shop site](https://jawab-fb4z.onrender.com/demo/the-plug) |
+| `/jawab.js` | The website chat bubble, for a website to host itself ([`docs/EMBED.md`](docs/EMBED.md)) |
+| `/embed.js?b={slug}` | The same bubble with a business's settings filled in, e.g. on [a demo shop site](https://jawab-fb4z.onrender.com/demo/the-plug) |
 
 ## Repository layout
 
@@ -99,21 +137,22 @@ Copy `.env.example` to `.env` for the settings: `OPENAI_API_KEY`, and optionally
 │   ├── main.py         # FastAPI: pages, customer API, owner API, onboarding, sandboxes
 │   ├── db.py           # SQLAlchemy models (every table has a business_id) and seeding
 │   ├── limits.py       # Rate limits that protect the API credit
-│   ├── embed.js        # The website chat bubble
-│   ├── services/       # Conversations, owner inbox and learning, KB edits, onboarding, sandboxes
-│   └── static/         # Plain HTML, CSS and JavaScript; no build step
-├── kb/the-plug.md      # The demo business's knowledge base
-├── docs/               # The spec, test script and demo business written for the hackathon
+│   ├── services/       # Conversations, owner inbox and learning, KB edits, onboarding, sandboxes,
+│   │                   # per-business settings, the accent theme, alerts and email
+│   └── static/         # Plain HTML, CSS and JavaScript; no build step (jawab.js is the bubble)
+├── kb/the-plug.md      # The Plug's knowledge base: the seed for a new database
+├── docs/               # The spec, test script and demo business written for the hackathon; EMBED.md
 ├── tests/              # pytest, on an in-memory database with scripted model responses
-└── render.yaml         # Hosting for the public demo (Render, free plan)
+├── render.yaml         # Hosting for the public demo (Render, free plan)
+└── render.plug.yaml    # Hosting for The Plug's own chat (single-business mode, Postgres)
 ```
 
 ## The public demo's limits
 
 The demo calls a real model, so it's protected: per-visitor and daily caps on model calls (`app/limits.py`), at most three onboardings per visitor a day, and a spending cap at the provider. Sandboxes are deleted after a day, and the free server's database is wiped whenever it restarts.
 
-Known simplifications, fine for a demo, to change for real customers: the owner key is in the owner page's URL instead of a login, `/start` needs no sign-up, and the rate limits live in memory on one server.
+Known simplifications, fine for a demo and for one owner, to change for many real customers: one owner key per business instead of a login (the inbox asks for it once per device, and alert emails never contain it), `/start` needs no sign-up, and the rate limits live in memory on one server.
 
 ## Data and privacy
 
-The Plug's knowledge base has the shop's real public prices. The demo keeps conversations only in its temporary database, and the model provider is called with storage turned off.
+The Plug's knowledge base has the shop's real public prices. The demo keeps conversations only in its temporary database, and the model provider is called with storage turned off. Where a business runs for real, conversations (and a customer's email, if they leave one for an answer) are kept in its own database.
