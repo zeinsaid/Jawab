@@ -42,7 +42,7 @@ function iconNewChat() {
   newChat.innerHTML = svgIcon("M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z");
 }
 
-// The bubble's small header: "New chat" becomes an icon, and a × asks embed.js to close the panel.
+// The bubble's small header: "New chat" becomes an icon, and a × asks the bubble (jawab.js) to close the panel.
 function compactHeader() {
   const svg = svgIcon;
   iconNewChat();

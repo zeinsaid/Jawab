@@ -38,7 +38,7 @@ Jawab is a product built on an engine. The engine decides what to say; Jawab is 
 
 | Layer | Repo | What it is |
 |---|---|---|
-| **Engine** | [Shop-Assistant](https://github.com/zeinsaid/Shop-Assistant) | The brain: one decision per message (`answer`, `ask_owner` or `handoff`), answers that must cite a public knowledge-base entry or code turns them into a question for the owner, internal rules that never reach customers, one corrective retry and a safe fallback. Also the learning call and the onboarding interview, and their prompts. Proven on a **130-case evaluation** across Anthropic, OpenAI and Google models. |
+| **Engine** | [Shop-Assistant](https://github.com/zeinsaid/Shop-Assistant) | The brain: one decision per message (`answer`, `ask_owner` or `handoff`), answers that must cite a public knowledge-base entry or code turns them into a question for the owner, internal rules that never reach customers, one corrective retry and a safe fallback. Also the learning call and the onboarding interview, and their prompts. Proven on a **139-case evaluation** across Anthropic, OpenAI and Google models. |
 | **Product** | Jawab (this repo) | Multi-business web app: database, customer chat, owner inbox and learning, `/start` onboarding, the embeddable bubble, the landing page, rate limits, the public demo's sandboxes. |
 | **Businesses** | data in Jawab's database | Each business is one markdown knowledge base plus settings. The Plug, a real print shop in Nicosia with its real prices, is the demo. Nothing business-specific is in the code. |
 
