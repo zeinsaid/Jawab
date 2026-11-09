@@ -51,7 +51,7 @@ def test_chat_answer_returns_only_customer_safe_fields(make):
 
     assert response.status_code == 200
     data = response.json()
-    assert set(data) == {"conversation_id", "state", "message", "panel", "contacts", "ask_email"}
+    assert set(data) == {"conversation_id", "state", "message", "panel", "contacts", "ask_email", "ask_contact"}
     assert data["contacts"] is None and data["ask_email"] is False  # an answer needs neither
     assert data["state"] == "bot_active"
     assert set(data["message"]) == {"id", "role", "text", "action"}
@@ -121,7 +121,8 @@ def test_handoff_stops_the_bot(make):
     later = client.post(CHAT, json={"conversation_id": first["conversation_id"], "message": "Hello??"})
     assert later.status_code == 200
     assert later.json() == {"conversation_id": first["conversation_id"], "state": "human_handoff",
-                            "message": None, "panel": None, "contacts": None, "ask_email": False}
+                            "message": None, "panel": None, "contacts": None, "ask_email": False,
+                            "ask_contact": False}
     assert len(scripted.calls) == 1  # the second message never reached the model
 
     with sessions() as session:

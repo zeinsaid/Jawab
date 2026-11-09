@@ -99,6 +99,7 @@ def escalation_view(session: Session, business: Business, escalation: Escalation
         "customer_language": conversation.language if conversation else None,
         # Owner-only: where the answer will be emailed, if the customer left an address.
         "customer_email": conversation.customer_email if conversation else None,
+        "customer_phone": conversation.customer_phone if conversation else None,  # left after a complaint or lead
         "created_at": _iso(escalation.created_at),
         "answered_at": _iso(escalation.answered_at),
         "owner_answer": escalation.owner_answer,

@@ -38,12 +38,12 @@ services:
         sync: false
       - key: PLUG_OWNER_KEY # the inbox key: asked for once per device
         generateValue: true
-      # Email (Resend). Until theplug.cy is verified in Resend, its test sender only reaches the
-      # Resend account's own address; then set "The Plug <no-reply@theplug.cy>".
+      # Email (Resend). theplug.cy is verified in Resend, so any recipient works (D-012). Keep this
+      # value equal to the dashboard's: a blueprint sync writes it back.
       - key: RESEND_API_KEY
         sync: false
       - key: JAWAB_EMAIL_FROM
-        value: The Plug <onboarding@resend.dev>
+        value: The Plug <no-reply@theplug.cy>
       - key: OWNER_ALERT_EMAIL # questions the bot can't answer, and offline alerts
         sync: false
       - key: SHOP_ALERT_EMAILS # complaints and leads: the shop's Gmail and the manager, comma-separated

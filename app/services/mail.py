@@ -18,7 +18,8 @@ RESEND_URL = "https://api.resend.com/emails"
 
 
 class Mailer(Protocol):
-    def send(self, to: list[str], subject: str, text: str, reply_to: str | None = None) -> bool: ...
+    def send(self, to: list[str], subject: str, text: str, reply_to: str | None = None,
+             cc: list[str] | None = None) -> bool: ...
 
 
 class ResendMailer:
@@ -27,12 +28,15 @@ class ResendMailer:
         self.sender = sender  # e.g. "The Plug <no-reply@theplug.cy>"
         self.http = http or httpx.Client(timeout=10)
 
-    def send(self, to: list[str], subject: str, text: str, reply_to: str | None = None) -> bool:
+    def send(self, to: list[str], subject: str, text: str, reply_to: str | None = None,
+             cc: list[str] | None = None) -> bool:
         if not to:
             return False
         payload = {"from": self.sender, "to": to, "subject": subject, "text": text}
         if reply_to:
             payload["reply_to"] = reply_to
+        if cc:
+            payload["cc"] = cc
         try:
             response = self.http.post(RESEND_URL, json=payload,
                                       headers={"Authorization": f"Bearer {self.api_key}"})
@@ -43,14 +47,15 @@ class ResendMailer:
             # Until the sending domain is verified, Resend only delivers to the account's own address.
             log.warning("email not sent (Resend %s: %s): %s", response.status_code, response.text[:200], subject)
             return False
-        log.info("email sent to %d recipient(s): %s", len(to), subject)
+        log.info("email sent to %d recipient(s): %s", len(to) + len(cc or []), subject)
         return True
 
 
 class NullMailer:
     """No RESEND_API_KEY: say what would have been sent, send nothing."""
 
-    def send(self, to: list[str], subject: str, text: str, reply_to: str | None = None) -> bool:
+    def send(self, to: list[str], subject: str, text: str, reply_to: str | None = None,
+             cc: list[str] | None = None) -> bool:
         log.info("email not sent (no RESEND_API_KEY): %s", subject)
         return False
 
@@ -61,6 +66,8 @@ class RecordingMailer:
 
     sent: list[dict] = field(default_factory=list)
 
-    def send(self, to: list[str], subject: str, text: str, reply_to: str | None = None) -> bool:
-        self.sent.append({"to": list(to), "subject": subject, "text": text, "reply_to": reply_to})
+    def send(self, to: list[str], subject: str, text: str, reply_to: str | None = None,
+             cc: list[str] | None = None) -> bool:
+        self.sent.append({"to": list(to), "subject": subject, "text": text, "reply_to": reply_to,
+                          "cc": list(cc or [])})
         return True

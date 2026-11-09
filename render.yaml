@@ -38,6 +38,6 @@ services:
         sync: false
       - key: OWNER_ALERT_EMAIL
         sync: false
-      # Resend's test sender until theplug.cy is verified there; then "Jawab demo <no-reply@theplug.cy>".
+      # theplug.cy is verified in Resend (D-012). Keep equal to the dashboard's: a blueprint sync writes it back.
       - key: JAWAB_EMAIL_FROM
-        value: Jawab demo <onboarding@resend.dev>
+        value: Jawab demo <no-reply@theplug.cy>

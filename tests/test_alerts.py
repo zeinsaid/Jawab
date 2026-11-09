@@ -103,26 +103,132 @@ def test_complaints_and_leads_email_the_shop(make, reason, subject):
     client, mailer, _, _ = make(decision("handoff", reason, "I'm passing this to the team.",
                                          reasoning="The customer wants a refund for a misprinted poster."))
     data = say(client, "You ruined my poster, I want my money back").json()
-    assert data["state"] == "human_handoff"
+    # The Plug handles complaints from the shop's email ("handoffs": "notify"): the bot carries on.
+    assert data["state"] == "bot_active"
     assert data["contacts"] == CONTACTS_EN
     assert data["ask_email"] is False
+    assert data["ask_contact"] is True
     assert len(mailer.sent) == 1
     email = mailer.sent[0]
     assert email["to"] == ["shop@example.com", "manager@example.com"]
+    assert email["cc"] == ["owner@example.com"]  # cc_owner
     assert email["subject"].startswith(subject)
     assert "Summary: The customer wants a refund for a misprinted poster." in email["text"]
     assert "Customer: You ruined my poster, I want my money back" in email["text"]
     assert "Assistant: I'm passing this to the team." in email["text"]
     assert "Customer's email: not given" in email["text"]
+    assert email["reply_to"] is None
+
+
+def test_a_notified_complaint_is_recorded_not_left_open(make):
+    client, mailer, sessions, headers = make(
+        decision("handoff", "complaint", "Sorry about that, the team will look into it."),
+        decision("handoff", "complaint", "The team will look into it."),
+        decision("answer", reply="We're open 24/7."),
+    )
+    first = say(client, "My prints came out wrong, I want a refund").json()
+    # Nothing for the owner to do: recorded in the inbox's history, not as a pending task.
+    card = client.get(f"{OWNER}/escalations", headers=headers).json()["escalations"][0]
+    assert (card["kind"], card["reason"], card["status"]) == ("handoff", "complaint", "notified")
+    assert card["answered_at"] is not None
+    # Still complaining in the same chat: no second email to the shop.
+    again = say(client, "Seriously, this is unacceptable", first["conversation_id"]).json()
+    assert again["message"] is not None and len(mailer.sent) == 1
+    # And the bot keeps answering other questions.
+    later = say(client, "Are you open now?", first["conversation_id"]).json()
+    assert later["message"]["text"] == "We're open 24/7." and later["state"] == "bot_active"
+    with sessions() as session:
+        assert len(session.scalars(select(Escalation)).all()) == 1
 
 
 def test_other_handoffs_email_nobody_but_show_the_contacts(make):
     client, mailer, sessions, _ = make(decision("handoff", "other", "A team member will help you."))
     data = say(client, "I think I left my USB stick there yesterday").json()
-    assert data["state"] == "human_handoff" and data["contacts"] == CONTACTS_EN
+    assert data["state"] == "bot_active" and data["contacts"] == CONTACTS_EN
+    assert data["ask_contact"] is False  # nobody is emailed about it, so there's no one to pass it to
     assert mailer.sent == []
     with sessions() as session:
-        assert session.scalar(select(Escalation)).status == "pending"  # still in the owner's inbox
+        assert session.scalar(select(Escalation)).status == "notified"
+
+
+def test_the_inbox_mode_still_waits_for_a_person(make):
+    client, mailer, sessions, headers = make(decision("handoff", "complaint", "Passing you to the team."))
+    with sessions() as session:  # a business whose team replies in the inbox
+        business = session.scalar(select(Business))
+        business.settings = {**business.settings, "handoffs": "inbox", "cc_owner": False}
+        session.commit()
+    data = say(client, "My order is wrong").json()
+    assert data["state"] == "human_handoff"
+    assert mailer.sent[0]["cc"] == []
+    with sessions() as session:
+        assert session.scalar(select(Escalation)).status == "pending"
+    quiet = say(client, "Hello?", data["conversation_id"]).json()
+    assert quiet["message"] is None and quiet["ask_contact"] is False
+
+
+# --- "Leave your email or WhatsApp number" after a complaint or lead ------------------------------
+
+
+def test_a_number_left_after_a_complaint_is_emailed_to_the_shop_in_the_same_thread(make):
+    client, mailer, _, headers = make(decision("handoff", "complaint", "Sorry, the team will look into it."))
+    conversation = say(client, "My prints came out wrong, I want a refund").json()["conversation_id"]
+    url = f"/api/b/the-plug/conversations/{conversation}/contact"
+    assert client.post(url, json={"contact": "call me maybe"}).status_code == 422
+    assert client.post(url, json={"contact": "12"}).status_code == 422
+    assert client.post(url, json={"contact": "+357 99 123456"}).json() == {"ok": True, "kind": "phone"}
+
+    assert len(mailer.sent) == 2
+    first, follow_up = mailer.sent
+    assert follow_up["subject"] == "Re: " + first["subject"]
+    assert follow_up["to"] == ["shop@example.com", "manager@example.com"] and follow_up["cc"] == ["owner@example.com"]
+    assert "Customer's WhatsApp / phone: +357 99 123456" in follow_up["text"]
+    assert "Customer: My prints came out wrong, I want a refund" in follow_up["text"]
+    # The form doesn't come back, and the owner sees the number on the card.
+    messages = client.get(f"/api/b/the-plug/conversations/{conversation}/messages").json()
+    assert messages["ask_contact"] is False
+    card = client.get(f"{OWNER}/escalations", headers=headers).json()["escalations"][0]
+    assert card["customer_phone"] == "+357 99 123456"
+    # A correction is stored, but the shop isn't emailed again.
+    client.post(url, json={"contact": "customer@example.com"})
+    assert len(mailer.sent) == 2
+
+
+def test_an_email_left_after_a_lead_lets_the_shop_reply_directly(make):
+    client, mailer, sessions, _ = make(decision("handoff", "lead", "The team will get back to you with a price."))
+    conversation = say(client, "We need 2000 flyers every month for our gym").json()["conversation_id"]
+    # Reloading the page: the form is offered again until something is left.
+    assert client.get(f"/api/b/the-plug/conversations/{conversation}/messages").json()["ask_contact"] is True
+    response = client.post(f"/api/b/the-plug/conversations/{conversation}/contact",
+                           json={"contact": "gym@example.com"})
+    assert response.json() == {"ok": True, "kind": "email"}
+    follow_up = mailer.sent[-1]
+    assert follow_up["reply_to"] == "gym@example.com"
+    assert "Customer's email: gym@example.com (reply to this email to write to them)" in follow_up["text"]
+    with sessions() as session:
+        stored = session.scalar(select(Conversation))
+        assert (stored.customer_email, stored.customer_phone) == ("gym@example.com", None)
+
+
+def test_a_contact_needs_a_complaint_or_lead_and_a_business_that_asks(make):
+    client, _, _, _ = make(decision("answer", reply="We're open 24/7."))
+    conversation = say(client, "Are you open now?").json()["conversation_id"]
+    url = f"/api/b/the-plug/conversations/{conversation}/contact"
+    assert client.post(url, json={"contact": "+357 99 123456"}).status_code == 409
+    demo, _, _, _ = make(decision("handoff", "complaint", "Passing you on."), deployment=Deployment())
+    complained = say(demo, "My prints are wrong").json()
+    assert complained["ask_contact"] is False
+    url = f"/api/b/the-plug/conversations/{complained['conversation_id']}/contact"
+    assert demo.post(url, json={"contact": "+357 99 123456"}).status_code == 404
+
+
+def test_no_email_is_sent_twice_when_the_contact_was_already_known(make):
+    client, mailer, _, _ = make(decision(), decision("handoff", "complaint", "Sorry, the team will look into it."))
+    conversation = say(client, "Are you open on Christmas?").json()["conversation_id"]
+    client.post(f"/api/b/the-plug/conversations/{conversation}/email", json={"email": "c@example.com"})
+    complained = say(client, "And my last order was printed wrong", conversation).json()
+    assert complained["ask_contact"] is False  # we already have a way to reach them
+    shop_email = mailer.sent[-1]
+    assert "Customer's email: c@example.com" in shop_email["text"] and shop_email["reply_to"] == "c@example.com"
 
 
 def test_abuse_gets_only_the_goodbye_and_the_chat_ends(make):

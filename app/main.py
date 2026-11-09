@@ -49,7 +49,7 @@ from app.services.businesses import BrainCache, get_business
 from app.services.mail import Mailer, NullMailer, ResendMailer
 from app.services.theme import accent_style
 from brain.llm import DryRunClient, LLMClient, make_client
-from brain.schema import Action, HandoffReason
+from brain.schema import Action
 
 STATIC = Path(__file__).resolve().parent / "static"
 LOADER_SCRIPT = STATIC / "jawab.js"  # the bubble; /embed.js serves it with a business's defaults filled in
@@ -77,6 +77,7 @@ MODEL = "gpt-6-luna"
 MODEL_TIMEOUT_SECONDS = 45
 DRAFT_TIMEOUT_SECONDS = 300
 EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+PHONE = re.compile(r"^\+?[0-9][0-9 ()./-]{5,23}$")  # then 7 to 15 digits: a WhatsApp or phone number
 TRANSCRIPT_IN_ALERT = 12  # messages in a complaint or lead email
 
 # Single-business mode serves none of the public demo: no landing page, sandboxes or onboarding,
@@ -115,6 +116,23 @@ class EmailRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     email: str = Field(min_length=3, max_length=254, pattern=EMAIL.pattern)
+
+
+class ContactRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    contact: str = Field(min_length=3, max_length=254)  # an email or a WhatsApp / phone number
+
+
+def parse_contact(value: str) -> tuple[str, str] | None:
+    """("email", address) or ("phone", number) from what the customer typed, or None."""
+    value = " ".join(value.split())
+    if EMAIL.match(value):
+        return "email", value
+    digits = sum(ch.isdigit() for ch in value)
+    if PHONE.match(value) and 7 <= digits <= 15:
+        return "phone", value
+    return None
 
 
 class OwnerText(BaseModel):
@@ -372,7 +390,8 @@ def create_app(engine: Engine, client: LLMClient, limiter: RateLimiter | None = 
             if conversation.state in convs.QUIET:
                 session.commit()
                 return {"conversation_id": str(conversation.id), "state": conversation.state,
-                        "message": None, "panel": None, "contacts": None, "ask_email": False}
+                        "message": None, "panel": None, "contacts": None, "ask_email": False,
+                        "ask_contact": False}
 
             # Step 4: history from the database, then the brain (outside any open transaction).
             incoming = convs.build_incoming(session, business, conversation, customer_message)
@@ -392,7 +411,8 @@ def create_app(engine: Engine, client: LLMClient, limiter: RateLimiter | None = 
             # Steps 5-6: save the reply and update the state and the owner's inbox.
             session.refresh(conversation)  # the owner may have changed it meanwhile
             decision = result.decision
-            bot_message, created = convs.record_decision(session, business, conversation, customer_message, decision)
+            bot_message, created = convs.record_decision(session, business, conversation, customer_message, decision,
+                                                         handoffs=settings["handoffs"])
             session.commit()
 
             # One email per new event, sent after the response has gone out.
@@ -400,10 +420,11 @@ def create_app(engine: Engine, client: LLMClient, limiter: RateLimiter | None = 
                 if decision.action is Action.ASK_OWNER:
                     background.add_task(alerts.ask_owner, business.name, created.question, conversation.language,
                                         customer_message.text, f"{base_url(request)}/owner/{business.slug}")
-                elif decision.handoff_reason in (HandoffReason.COMPLAINT, HandoffReason.LEAD):
+                elif decision.handoff_reason in convs.TEAM_REASONS:
                     background.add_task(alerts.handoff, business.name, str(decision.handoff_reason),
                                         decision.reasoning, transcript(session, business, conversation.id),
-                                        conversation.customer_email)
+                                        conversation.customer_email, conversation.customer_phone,
+                                        settings["cc_owner"])
 
             # Step 7: only customer-safe fields leave the server.
             contacts = biz_settings.pick(settings["contact_line"], conversation.language)
@@ -418,6 +439,9 @@ def create_app(engine: Engine, client: LLMClient, limiter: RateLimiter | None = 
                 # "Leave your email and we'll send you the answer", under a question for the owner.
                 "ask_email": bool(settings["email_customers"] and decision.action is Action.ASK_OWNER
                                   and not conversation.customer_email),
+                # "Leave your email or WhatsApp number so the team can contact you", under a complaint or lead.
+                "ask_contact": bool(decision.handoff_reason in convs.TEAM_REASONS
+                                    and convs.wants_contact(session, business, conversation, settings)),
             }
 
     @app.get("/api/b/{slug}/conversations/{conversation_id}/messages")
@@ -435,6 +459,7 @@ def create_app(engine: Engine, client: LLMClient, limiter: RateLimiter | None = 
                 "messages": [convs.customer_view(m, contacts) for m in rows],
                 "email_capture": bool(settings["email_customers"]),
                 "email_saved": conversation.customer_email is not None,
+                "ask_contact": convs.wants_contact(session, business, conversation, settings),
             }
 
     @app.post("/api/b/{slug}/conversations/{conversation_id}/email")
@@ -456,6 +481,39 @@ def create_app(engine: Engine, client: LLMClient, limiter: RateLimiter | None = 
             conversation.customer_email = body.email
             session.commit()
         return {"ok": True}
+
+    @app.post("/api/b/{slug}/conversations/{conversation_id}/contact")
+    def save_contact(slug: str, conversation_id: uuid.UUID, body: ContactRequest,
+                     background: BackgroundTasks) -> dict:
+        """An email or WhatsApp number left after a complaint or lead, so the team can reach the
+        customer (D-013). The first one is emailed to the team, as a reply to the complaint's email;
+        a later change is only stored. It goes to the shop, never to the address typed."""
+        with session_factory() as session:
+            business = business_or_404(session, slug)
+            settings = biz_settings.effective(business)
+            if not settings["ask_contact"]:
+                raise HTTPException(404, "Not available.")
+            conversation = convs.get_conversation(session, business, conversation_id)
+            if conversation is None:
+                raise HTTPException(404, "Conversation not found.")
+            handoff = convs.team_handoff(session, business, conversation)
+            if handoff is None:
+                raise HTTPException(409, "There's nothing for the team to contact you about in this chat.")
+            parsed = parse_contact(body.contact)
+            if parsed is None:
+                raise HTTPException(422, "That isn't an email address or a phone number.")
+            first = not (conversation.customer_email or conversation.customer_phone)
+            kind, value = parsed
+            if kind == "email":
+                conversation.customer_email = value
+            else:
+                conversation.customer_phone = value
+            session.commit()
+            if first and settings["alerts"]:
+                background.add_task(alerts.contact_left, business.name, handoff.reason, handoff.question,
+                                    conversation.customer_email, conversation.customer_phone,
+                                    transcript(session, business, conversation.id), settings["cc_owner"])
+        return {"ok": True, "kind": kind}
 
     # --- Owner API ------------------------------------------------------------------------------
 

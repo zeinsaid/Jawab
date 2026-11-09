@@ -3,12 +3,13 @@
 | event                      | to                        |
 |----------------------------|---------------------------|
 | ask_owner                  | the owner (OWNER_ALERT_EMAIL) |
-| handoff, complaint / lead  | the shop (SHOP_ALERT_EMAILS)  |
+| handoff, complaint / lead  | the shop (SHOP_ALERT_EMAILS), the owner in CC if `cc_owner` |
+| the customer leaves a contact after one | the same people, as a "Re:" of that email (D-013) |
 | handoff, other / abuse     | nobody                    |
 | the model can't be reached | the owner, at most every 6 hours per deployment |
 | the owner answers          | the customer, if they left an email, in their language |
 
-Only businesses whose settings turn `alerts` / `email_customers` on send the first two and the
+Only businesses whose settings turn `alerts` / `email_customers` on send the first three and the
 last; the offline alert belongs to the deployment and is always on when OWNER_ALERT_EMAIL is set.
 Recipients come from env vars, never from the repo. These methods run as background tasks after
 the response has gone out, and take plain values, not database rows.
@@ -118,23 +119,48 @@ class Alerts:
         )
         return self.mailer.send(self.config.owner, self._subject(f"New question: {_short(question, 70)}"), text)
 
+    def _team(self, cc_owner: bool) -> tuple[list[str], list[str]]:
+        """Who a complaint or lead goes to: the shop, with the owner in CC (once, and as the
+        recipient if no shop address is set)."""
+        shop = list(self.config.shop)
+        owner = [a for a in self.config.owner if a not in shop] if cc_owner else []
+        return (shop, owner) if shop else (owner, [])
+
+    @staticmethod
+    def handoff_subject(reason: str, customer_text: str) -> str:
+        label = {"complaint": "Complaint", "lead": "Lead"}.get(reason, reason.title())
+        return f"[Jawab – {label}] {_short(customer_text, 70)}".rstrip()
+
     def handoff(self, business_name: str, reason: str, summary: str, transcript: list[tuple[str, str]],
-                customer_email: str | None) -> bool:
+                customer_email: str | None, customer_phone: str | None = None, cc_owner: bool = False) -> bool:
         """A complaint or a lead: tell the shop. Other reasons send nothing."""
-        label = {"complaint": "Complaint", "lead": "Lead"}.get(reason)
-        if label is None:
+        if reason not in ("complaint", "lead"):
             return False
         lines = [f"{who}: {said}" for who, said in transcript]
         text = (
-            f"A customer in {business_name}'s website chat needs a person ({label.lower()}).\n\n"
+            f"A customer in {business_name}'s website chat needs a person ({reason}).\n\n"
             f"Summary: {summary}\n\n"
-            f"Customer's email: {customer_email or 'not given'}\n\n"
-            "The conversation:\n" + "\n".join(lines) + "\n\n"
+            + _reach(customer_email, customer_phone)
+            + "\n\nThe conversation:\n" + "\n".join(lines) + "\n\n"
             "The customer was shown the shop's phone and WhatsApp numbers."
         )
         latest = next((said for who, said in reversed(transcript) if who == "Customer"), "")
-        subject = f"[Jawab – {label}] {_short(latest, 70)}".rstrip()
-        return self.mailer.send(self.config.shop, subject, text)
+        to, cc = self._team(cc_owner)
+        return self.mailer.send(to, self.handoff_subject(reason, latest), text, reply_to=customer_email, cc=cc)
+
+    def contact_left(self, business_name: str, reason: str, customer_text: str, customer_email: str | None,
+                     customer_phone: str | None, transcript: list[tuple[str, str]], cc_owner: bool = False) -> bool:
+        """The customer left a way to reach them after a complaint or lead was emailed: a reply to
+        that email (same subject), so it lands in the same thread."""
+        lines = [f"{who}: {said}" for who, said in transcript]
+        text = (
+            f"The customer from this {reason} in {business_name}'s website chat left a way to reach them.\n\n"
+            + _reach(customer_email, customer_phone)
+            + "\n\nThe conversation so far:\n" + "\n".join(lines) + "\n"
+        )
+        to, cc = self._team(cc_owner)
+        subject = "Re: " + self.handoff_subject(reason, customer_text)
+        return self.mailer.send(to, subject, text, reply_to=customer_email, cc=cc)
 
     def answer_to_customer(self, business_name: str, to: str, language: str | None, question: str,
                            answer: str, contact_line: str | None, reply_to: str | None) -> bool:
@@ -184,6 +210,16 @@ class Alerts:
                 session.add(AppState(key=OFFLINE_KEY, value=now.isoformat()))
             session.commit()
         return True
+
+
+def _reach(email: str | None, phone: str | None) -> str:
+    """How the team can reach the customer, as the alert emails say it."""
+    lines = []
+    if phone:
+        lines.append(f"Customer's WhatsApp / phone: {phone}")
+    if email:
+        lines.append(f"Customer's email: {email} (reply to this email to write to them)")
+    return "\n".join(lines) or "Customer's email: not given"
 
 
 def _short(text: str, limit: int) -> str:

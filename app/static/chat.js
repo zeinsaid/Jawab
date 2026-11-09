@@ -14,6 +14,7 @@ const EMBEDDED = PARAMS.get("embed") === "1";
 const FRAMED = PARAMS.get("frame") === "1";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+const PHONE = /^\+?[0-9][0-9 ()./-]{5,23}$/; // with 7 to 15 digits, as the server checks
 
 // Tell the bubble around us (jawab.js) what's happening: ready, failed, the conversation, close.
 function tellBubble(message) {
@@ -88,6 +89,10 @@ const LABELS = {
     emailSave: "Save",
     emailInvalid: "That doesn't look like an email address.",
     emailSaved: "Thanks! We'll email you the answer too.",
+    contactPrompt: "Leave your email or WhatsApp number so the team can contact you about this",
+    contactAria: "Your email or WhatsApp number",
+    contactInvalid: "Please enter an email address or a phone number.",
+    contactSaved: "Thanks! The team will contact you.",
     notFound: "This chat isn't available.",
     footer: "Answers come only from {name}'s own information. When it isn't sure, it asks the team.",
     close: "Close",
@@ -138,6 +143,10 @@ const LABELS = {
     emailSave: "Αποθήκευση",
     emailInvalid: "Αυτό δεν μοιάζει με διεύθυνση email.",
     emailSaved: "Ευχαριστούμε! Θα σου στείλουμε την απάντηση και με email.",
+    contactPrompt: "Άφησε το email ή το WhatsApp σου για να επικοινωνήσει μαζί σου η ομάδα για αυτό",
+    contactAria: "Το email ή το WhatsApp σου",
+    contactInvalid: "Γράψε ένα email ή έναν αριθμό τηλεφώνου.",
+    contactSaved: "Ευχαριστούμε! Η ομάδα θα επικοινωνήσει μαζί σου.",
     notFound: "Αυτή η συνομιλία δεν είναι διαθέσιμη.",
     footer: "Οι απαντήσεις βγαίνουν μόνο από τις πληροφορίες του {name}. Όταν δεν είναι σίγουρος, ρωτάει την ομάδα.",
     close: "Κλείσιμο",
@@ -188,6 +197,10 @@ const LABELS = {
     emailSave: "حفظ",
     emailInvalid: "هذا لا يبدو عنوان بريد إلكتروني صحيحاً.",
     emailSaved: "شكراً! سنرسل لك الإجابة عبر البريد الإلكتروني أيضاً.",
+    contactPrompt: "اترك بريدك الإلكتروني أو رقم واتساب ليتواصل معك الفريق بخصوص هذا الأمر",
+    contactAria: "بريدك الإلكتروني أو رقم واتساب",
+    contactInvalid: "يرجى إدخال بريد إلكتروني أو رقم هاتف.",
+    contactSaved: "شكراً! سيتواصل معك الفريق.",
     notFound: "هذه المحادثة غير متاحة.",
     footer: "الإجابات مأخوذة فقط من معلومات {name}. وعندما لا يكون متأكداً، يسأل الفريق.",
     close: "إغلاق",
@@ -417,17 +430,40 @@ function addOffline(text) {
 
 // "Leave your email and we'll send you the answer": under a question for the owner, once.
 function addEmailForm() {
-  if (!business.email_capture || messagesEl.querySelector(".email-capture")) return;
-  const li = el("li", { className: "message note email-capture" });
-  const label = el("label", { htmlFor: "email-input", dir: "auto" });
-  label.dataset.label = "emailPrompt";
-  label.textContent = t("emailPrompt");
+  if (!business.email_capture) return;
+  addCaptureForm({
+    className: "email-capture", prompt: "emailPrompt", aria: "emailAria", invalid: "emailInvalid", saved: "emailSaved",
+    input: { type: "email", autocomplete: "email", placeholder: "name@example.com" },
+    valid: (value) => EMAIL.test(value) && value.length <= 254,
+    path: "email", body: (value) => ({ email: value }),
+  });
+}
+
+// "Leave your email or WhatsApp number": under a complaint or lead, when the business asks (D-013).
+// The server says when (`ask_contact`) and works out which of the two it is.
+function addContactForm() {
+  addCaptureForm({
+    className: "contact-capture", prompt: "contactPrompt", aria: "contactAria", invalid: "contactInvalid",
+    saved: "contactSaved", input: { type: "text", autocomplete: "on", placeholder: "name@example.com / +357 99 123456" },
+    valid: (value) => (EMAIL.test(value) && value.length <= 254) || (PHONE.test(value)
+      && (value.match(/[0-9]/g) || []).length >= 7 && (value.match(/[0-9]/g) || []).length <= 15),
+    path: "contact", body: (value) => ({ contact: value }),
+  });
+}
+
+// One small form in the chat, once per kind: a label, a field, Save, and a status line.
+function addCaptureForm(kind) {
+  if (messagesEl.querySelector(`.${kind.className}`)) return;
+  const li = el("li", { className: `message note email-capture ${kind.className}` });
+  const inputId = `${kind.className}-input`;
+  const label = el("label", { htmlFor: inputId, dir: "auto" });
+  label.dataset.label = kind.prompt;
+  label.textContent = t(kind.prompt);
   // noValidate: our own message, in the page's language, instead of the browser's tooltip.
   const row = el("form", { className: "email-row", noValidate: true });
-  const field = el("input", { type: "email", id: "email-input", autocomplete: "email", maxLength: 254,
-    placeholder: "name@example.com", dir: "ltr" });
-  field.dataset.i18nAriaLabel = "emailAria";
-  field.setAttribute("aria-label", t("emailAria"));
+  const field = el("input", { ...kind.input, id: inputId, maxLength: 254, dir: "ltr" });
+  field.dataset.i18nAriaLabel = kind.aria;
+  field.setAttribute("aria-label", t(kind.aria));
   const saveButton = el("button", { type: "submit", className: "ghost-button" });
   saveButton.dataset.label = "emailSave";
   saveButton.textContent = t("emailSave");
@@ -439,20 +475,20 @@ function addEmailForm() {
     event.preventDefault();
     const value = field.value.trim();
     status.classList.remove("error");
-    if (!EMAIL.test(value) || value.length > 254) {
-      status.dataset.label = "emailInvalid";
-      status.textContent = t("emailInvalid");
+    if (!kind.valid(value)) {
+      status.dataset.label = kind.invalid;
+      status.textContent = t(kind.invalid);
       status.classList.add("error");
       return;
     }
     saveButton.disabled = true;
     try {
-      const response = await fetch(`${API}/conversations/${conversationId}/email`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: value }),
+      const response = await fetch(`${API}/conversations/${conversationId}/${kind.path}`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(kind.body(value)),
       });
       if (!response.ok) throw new Error(String(response.status));
-      const done = el("span", { dir: "auto", textContent: t("emailSaved") });
-      done.dataset.label = "emailSaved";
+      const done = el("span", { dir: "auto", textContent: t(kind.saved) });
+      done.dataset.label = kind.saved;
       li.classList.add("saved");
       li.replaceChildren(done);
     } catch {
@@ -632,6 +668,7 @@ async function send(text) {
         addNote("handedOff", { label: true, className: "status-note" });
         teamNoteShown = true;
       }
+      if (data.ask_contact) addContactForm();
     } else if (data.state === "human_handoff" && !teamNoteShown) {
       // A person has taken over: the message went to the team, and the bot stays quiet.
       addNote("sentToTeam", { label: true, className: "status-note" });
@@ -692,6 +729,7 @@ async function restore() {
       addNote("handedOff", { label: true, className: "status-note" });
       teamNoteShown = true;
     }
+    if (data.ask_contact) addContactForm();
     setState(data.state);
   } catch { /* keep the ID; the next message continues the conversation */ }
 }

@@ -2,7 +2,8 @@
 
 The KB says what the bot knows; these say how the product around it behaves for one business:
 its accent colour, the message shown when the chat is offline, the contact line under replies that
-need a person, and whether customers can leave an email and whether anyone gets alerts.
+need a person, whether customers can leave an email or a number, whether anyone gets alerts, and
+whether handed-off chats wait in the inbox or go to the team by email.
 
 Settings are configuration, not data. A seeded business gets them from its seed (app/db.py), and
 they're written again on every startup, so a deploy changes them. The KB and the conversations are
@@ -40,7 +41,15 @@ DEFAULTS = {
     "alerts": False,  # email the owner (ask_owner) and the shop (complaints, leads)
     "email_customers": False,  # offer "leave your email" and email the owner's answer
     "ui_languages": None,  # overrides the KB's ui_languages line for the page's toggle; None follows the KB
+    # What a handoff (other than abuse) does, D-013. "inbox": a person replies in the owner's inbox,
+    # and the bot stays quiet until it's given back. "notify": the team is told by email (complaints,
+    # leads) and handles it outside Jawab; the inbox only records it, and the bot carries on.
+    "handoffs": "inbox",
+    "ask_contact": False,  # after a complaint or lead: "leave your email or WhatsApp number"
+    "cc_owner": False,  # copy the owner on the shop's complaint and lead emails
 }
+
+HANDOFF_MODES = ("inbox", "notify")
 
 DEMO_OVERLAY = {
     # The public demo shows off all three page languages, Arabic included, whatever the real shop's
@@ -51,6 +60,10 @@ DEMO_OVERLAY = {
     "reply_to": None,
     "alerts": False,
     "email_customers": False,
+    # A sandbox owner tries the inbox's "reply as the team" flow, so the demo keeps it.
+    "handoffs": "inbox",
+    "ask_contact": False,
+    "cc_owner": False,
 }
 
 ACCENT = re.compile(r"^#[0-9a-fA-F]{6}$")
@@ -67,6 +80,8 @@ def effective(business: Business) -> dict:
     settings = {**DEFAULTS, **(business.settings or {})}
     if settings["accent"] and not ACCENT.match(str(settings["accent"])):
         settings["accent"] = None
+    if settings["handoffs"] not in HANDOFF_MODES:
+        settings["handoffs"] = "inbox"
     if business.demo or business.sandbox_of:  # belt and braces: a demo copy never goes live
         settings.update(DEMO_OVERLAY)
     return settings

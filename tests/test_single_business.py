@@ -155,3 +155,24 @@ def test_the_embed_script_offers_the_websites_languages_where_it_runs_for_real(s
     script = client.get("/embed.js?b=the-plug").text
     assert '"languages": ["en", "el"]' in script
     assert '"name": "The Plug"' in script and "22 542659" in script  # the real offline message
+
+
+def test_startup_adds_a_new_nullable_column_to_an_older_database():
+    """Like Neon before `customer_phone` existed: the table is there, the column isn't (D-014)."""
+    from sqlalchemy import inspect, text
+
+    from app.db import init_db
+
+    engine = make_engine("sqlite://")
+    with engine.begin() as connection:
+        connection.execute(text(
+            "CREATE TABLE conversations (id CHAR(32) PRIMARY KEY, business_id INTEGER NOT NULL, "
+            "state VARCHAR NOT NULL, language VARCHAR, customer_email TEXT, "
+            "created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL)"))
+        connection.execute(text("INSERT INTO conversations VALUES "
+                                "('a', 1, 'bot_active', 'en', NULL, '2026-11-08', '2026-11-08')"))
+    init_db(engine, make_session_factory(engine))
+    assert "customer_phone" in {c["name"] for c in inspect(engine).get_columns("conversations")}
+    with engine.connect() as connection:  # the old row is kept, with NULL in the new column
+        assert connection.execute(text("SELECT state, customer_phone FROM conversations")).one() == ("bot_active", None)
+    init_db(engine, make_session_factory(engine))  # and a second start changes nothing

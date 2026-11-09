@@ -33,6 +33,8 @@ const ACTION_LABELS = { answer: "Answer", ask_owner: "Ask owner", handoff: "Hand
 const KIND_LABELS = { ask_owner: "Question for you", handoff: "Handed off to you" };
 // Why the assistant handed off (the engine's handoff_reason). Complaints and leads were also emailed to the shop.
 const REASON_LABELS = { complaint: "Complaint", lead: "Lead", other: "Needs a person", abuse: "Abuse" };
+// A handoff the business handles outside Jawab (settings: handoffs "notify"): recorded, nothing to do here.
+const NOTIFIED_LABELS = { complaint: "Emailed to the shop", lead: "Emailed to the shop", other: "Shown the contacts" };
 const LANGUAGE_NAMES = { en: "English", el: "Greek", ar: "Arabic" };
 
 const cards = new Map(); // escalation id -> {node, status, decision, signature, busy}
@@ -195,7 +197,7 @@ function renderTranscript(messages) {
 
 function signature(e) {
   const last = e.messages[e.messages.length - 1];
-  return `${e.status}|${e.learn_decision}|${e.question}|${e.conversation_state}|${e.customer_email}|${last ? last.id : 0}`;
+  return `${e.status}|${e.learn_decision}|${e.question}|${e.conversation_state}|${e.customer_email}|${e.customer_phone}|${last ? last.id : 0}`;
 }
 
 function cardHeader(e) {
@@ -207,7 +209,10 @@ function cardHeader(e) {
   const title = e.kind === "handoff" && REASON_LABELS[e.reason]
     ? `${KIND_LABELS.handoff} · ${REASON_LABELS[e.reason]}` : KIND_LABELS[e.kind] || e.kind;
   const statusChip = e.reason === "abuse" && e.status === "closed"
-    ? el("span", { className: "status-chip", textContent: "Ended: the bot said goodbye" }) : status;
+    ? el("span", { className: "status-chip", textContent: "Ended: the bot said goodbye" })
+    : e.status === "notified"
+      ? el("span", { className: "status-chip", textContent: NOTIFIED_LABELS[e.reason] || NOTIFIED_LABELS.other })
+      : status;
   return el("header", { className: "card-header" },
     badge(e.kind, e.kind === "ask_owner" ? "Ask owner" : "Hand off"),
     el("span", { className: "card-title", textContent: title }),
@@ -223,6 +228,7 @@ function customerLine(e) {
     parts.push(e.kind === "ask_owner" && e.status === "pending"
       ? `Left an email: ${e.customer_email} (your answer is emailed there too)` : `Email: ${e.customer_email}`);
   }
+  if (e.customer_phone) parts.push(`WhatsApp / phone: ${e.customer_phone}`);
   return parts.length ? el("p", { className: "muted small customer-line", dir: "auto", textContent: parts.join(" · ") }) : null;
 }
 
@@ -550,6 +556,10 @@ function buildCard(e) {
     node.append(handoffPending(e));
   } else if (e.reason === "abuse") {
     node.append(el("p", { className: "muted small", textContent: "Nobody was alerted, and the bot won't reply in this chat again." }));
+  } else if (e.status === "notified") {
+    node.append(el("p", { className: "muted small", textContent: e.reason === "other"
+      ? "The customer was given the shop's contacts, and the bot kept answering. Nothing to do here."
+      : "The shop was emailed (and anything the customer left to reach them). The bot kept answering. Nothing to do here." }));
   } else {
     node.append(el("p", { className: "muted small", textContent: "The bot is answering this customer again." }));
   }

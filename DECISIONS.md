@@ -100,6 +100,8 @@ the hackathon design is in `docs/`. This log starts with The Plug's production d
 
 **Alternatives:** Also asking for an email after `complaint` and `lead` handoffs. It would help the shop reach those customers, but the shop's alert has already gone by then (a second email per event, or a delayed alert), and the customer is already shown the phone and WhatsApp numbers. Left out to keep this simple. Worth revisiting if leads go unanswered.
 
+**Update (9 Nov 2026):** revisited in D-013: after a complaint or lead the chat can now ask for an email or a WhatsApp number, sent to the shop as a follow-up email.
+
 ---
 
 ## D-009 — The owner key: asked once per device, never in a link
@@ -132,8 +134,40 @@ the hackathon design is in `docs/`. This log starts with The Plug's production d
 ---
 
 ## D-012 — Email sender until the domain is verified
-**Date:** 2026-11-07 · **Status:** Accepted
+**Date:** 2026-11-07 · **Status:** Done (theplug.cy verified; both services send from `no-reply@theplug.cy`, and both blueprints say so since 9 Nov 2026, because a blueprint sync writes the yaml's value over the dashboard's)
 
 **Decision:** Both blueprints send from Resend's test sender (`onboarding@resend.dev`) until theplug.cy is verified in Resend, then switch `JAWAB_EMAIL_FROM` to `The Plug <no-reply@theplug.cy>` (and `Jawab demo <no-reply@theplug.cy>` on the demo). No code change.
 
 **Finding:** Resend's test sender only delivers to the Resend **account's** own address. So `OWNER_ALERT_EMAIL` is set to that address (the owner's Gmail) on both services: owner alerts and the offline alert work now, confirmed with a live test on 7 Nov 2026. Emails to the shop (complaints, leads) and to real customers can only be delivered after the domain is verified and the sender switched.
+
+---
+
+## D-013 — Handoffs a business handles outside Jawab: notify, ask for a contact, copy the owner
+**Date:** 2026-11-09 · **Status:** Accepted
+
+**Context:** For The Plug, only the owner uses the inbox (the handoff spec: no staff access), and the manager handles complaints and leads from the shop's email. But a complaint still worked the hackathon way: the chat went into `human_handoff`, so the bot stopped answering that customer, and the item waited in the inbox as pending until someone pressed "Give back to the bot". The shop's email usually said "Customer's email: not given", so the shop couldn't reach the customer either, and the owner wasn't copied. A test complaint on 9 Nov showed all three.
+
+**Decision:** Three per-business settings.
+- `handoffs`: `inbox` (default, the old flow: a person replies in the inbox and the bot waits) or `notify`. In `notify`, a non-abuse handoff is recorded with a new escalation status, `notified` (in the inbox's history, nothing to do), the conversation keeps its state so the bot carries on, and a repeat handoff with the same reason in the same chat creates nothing (so a customer venting over five messages emails the shop once). Abuse is unchanged.
+- `ask_contact`: after a complaint or lead, the chat offers one field, "email or WhatsApp number". The server decides which it is (an email address, or 7 to 15 digits) and stores it in `customer_email` or the new `customer_phone`. The first one left is emailed to the shop as `Re: <the complaint's subject>`, so it threads under the complaint; a later correction is only stored. It's emailed to the shop, never to the address typed, so it can't be used to spam strangers. Not offered if the customer already left a way to reach them.
+- `cc_owner`: the owner is in CC on the shop's complaint and lead emails, and the follow-up.
+- Every complaint or lead email has Reply-To set to the customer's email when known, and says so, so staff can press Reply.
+
+The Plug: `notify`, `ask_contact` and `cc_owner` on. The demo keeps `inbox` and both off: a sandbox owner tries the "reply as the team" flow.
+
+**Alternatives:** A staff key for the inbox (a second login to manage, and against the "only me" decision). A "mark as handled" link in the shop's email (a working token in an email link, which D-009 avoids). Delaying the shop's email until the customer leaves a contact (needs a scheduler, and a free server sleeps). Two separate fields for email and phone (one field is simpler for the customer, and the format tells them apart).
+
+**Why:** The email route and the chat behaviour now match how the shop really works: the manager deals with complaints, the owner sees everything as owner and as Jawab's developer, the customer isn't left talking to a silent bot, and the inbox only holds what the owner must act on. As settings, a business whose team does use the inbox keeps the old flow.
+
+---
+
+## D-014 — Startup adds missing nullable columns
+**Date:** 2026-11-09 · **Status:** Accepted
+
+**Context:** D-013 adds `conversations.customer_phone`, the first column change since Neon was created. D-011 said a column change needs a manual `ALTER TABLE`; forgetting it would break every chat on deploy.
+
+**Decision:** After `create_all`, `add_missing_columns` compares each existing table with the models and runs `ALTER TABLE … ADD COLUMN` for any model column the table lacks, if it's nullable with no default (old rows get NULL). Anything else (a non-null column, a rename, a type change, a drop) stops startup with an error: that needs a real migration. Idempotent, so it runs on every start.
+
+**Alternatives:** A manual `ALTER TABLE` on Neon before the deploy (easy to forget, and the order matters). Alembic (migration files and a migration step for one added column; worth it once there's a change this can't do).
+
+**Why:** Adding a nullable column is the one schema change that's always safe to do automatically, and it's the common one. It turns "remember to run SQL before you push" into nothing.

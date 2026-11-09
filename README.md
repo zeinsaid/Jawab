@@ -74,7 +74,7 @@ The same code runs two ways. The public demo is one deployment; The Plug's own c
 
 **Single-business mode** is what lets a business run Jawab on its own key safely: nobody can create a business, open a sandbox or start an onboarding, so the key is only spent on that business's own chat. Every lookup is limited to the one business.
 
-**Per-business settings** (`app/services/settings.py`) sit next to the knowledge base: the short display name, an accent colour for the bubble and the chat page (made readable automatically: text on The Plug's neon `#F920EB` is darkened just enough to pass WCAG AA), the message shown when the chat is offline, a contact line under replies that need a person ("For anything urgent, call..."), a reply-to address, and switches for alerts and for emailing customers. Seeded businesses get them from their seed, and they're rewritten on every start: settings are configuration. On the public demo every demo copy gets a safe overlay instead: no real contacts, no emails to customers, no alerts. Otherwise a visitor could type any address as "their" email, answer as the sandbox owner, and make the shop's domain send whatever they liked.
+**Per-business settings** (`app/services/settings.py`) sit next to the knowledge base: the short display name, an accent colour for the bubble and the chat page (made readable automatically: text on The Plug's neon `#F920EB` is darkened just enough to pass WCAG AA), the message shown when the chat is offline, a contact line under replies that need a person ("For anything urgent, call..."), a reply-to address, switches for alerts and for emailing customers, and what a handoff does: wait in the inbox for a person to reply (the default), or go to the team by email while the bot carries on (`handoffs: notify`, for a business where only the owner uses the inbox). Seeded businesses get them from their seed, and they're rewritten on every start: settings are configuration. On the public demo every demo copy gets a safe overlay instead: no real contacts, no emails to customers, no alerts. Otherwise a visitor could type any address as "their" email, answer as the sandbox owner, and make the shop's domain send whatever they liked.
 
 **Page languages vs reply languages.** A knowledge base's `languages:` line says which languages the bot handles (it turns on the engine's notes for Greeklish or Arabizi); a `ui_languages:` line says which ones the chat page's toggle offers. The Plug's website is English and Greek, so its toggle is `en, el`, but an Arabic message still gets an Arabic answer.
 
@@ -83,14 +83,15 @@ The same code runs two ways. The public demo is one deployment; The Plug's own c
 | Event | Who's emailed |
 |---|---|
 | `ask_owner` (the bot doesn't know) | the owner (`OWNER_ALERT_EMAIL`): the question, the customer's language, a link to the inbox (never the key) |
-| `handoff`, reason `complaint` or `lead` | the shop (`SHOP_ALERT_EMAILS`): a short summary, the conversation, the customer's email if given |
-| `handoff`, reason `other` or `abuse` | nobody (`other` stays in the inbox; `abuse` ends the chat) |
+| `handoff`, reason `complaint` or `lead` | the shop (`SHOP_ALERT_EMAILS`), the owner in CC if the business asks: a short summary, the conversation, how to reach the customer if known (Reply-To is the customer's email) |
+| the customer then leaves an email or WhatsApp number | the same people, as a reply in the same thread |
+| `handoff`, reason `other` or `abuse` | nobody (`abuse` ends the chat) |
 | the model can't be reached | the owner, at most every 6 hours per deployment, saying why: out of credit, rate-limited, provider down, or other |
 | the owner answers | the customer, in their language, if they left an email |
 
-Recipients come from env vars, never from the repo. One email per event.
+Recipients come from env vars, never from the repo. One email per event, and one per reason per chat when the bot carries on after a complaint.
 
-**The customer side.** After a question goes to the owner, the chat offers *"Leave your email and we'll send you the answer"*. Every reply that needs a person ends with the business's contact line, except an abuse goodbye. If the model call fails (no credit, quota, timeout, provider down) or the server can't be reached, the chat shows the business's own offline message in the customer's language: never an error or a broken bubble.
+**The customer side.** After a question goes to the owner, the chat offers *"Leave your email and we'll send you the answer"*. After a complaint or a lead, it can offer *"Leave your email or WhatsApp number so the team can contact you about this"*, so the shop's email has someone to call back. Every reply that needs a person ends with the business's contact line, except an abuse goodbye. If the model call fails (no credit, quota, timeout, provider down) or the server can't be reached, the chat shows the business's own offline message in the customer's language: never an error or a broken bubble.
 
 **The website bubble** is a small loader the website hosts itself ([`docs/EMBED.md`](docs/EMBED.md)), so it appears at once even while a free server sleeps. It pings `/health` on page load to wake the server, shows a local greeting in the page's `<html lang>`, and hands the customer's first message to the real chat once it's ready, or shows the offline message after about a minute. The conversation ID lives in the website's own storage, so a returning visitor finds the owner's answer waiting.
 

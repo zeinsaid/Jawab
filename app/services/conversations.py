@@ -23,6 +23,8 @@ HUMAN_HANDOFF = "human_handoff"
 CLOSED = "closed"
 ENDED = "ended"  # an abuse goodbye: the bot stays silent and nobody is waiting to reply
 QUIET = (HUMAN_HANDOFF, ENDED)  # states where a new customer message gets no bot reply
+NOTIFIED = "notified"  # an escalation's status: the team was told outside Jawab, nothing to do in the inbox
+TEAM_REASONS = (HandoffReason.COMPLAINT, HandoffReason.LEAD)  # handoffs the shop is emailed about
 
 GREEK = re.compile(r"[Ͱ-Ͽἀ-῿]")
 ARABIC = re.compile(r"[؀-ۿݐ-ݿࢠ-ࣿ]")
@@ -112,11 +114,13 @@ def one_line(text: str, limit: int = SUMMARY_CHARS) -> str:
 
 
 def record_decision(session: Session, business: Business, conversation: Conversation,
-                    customer_message: Message, decision: BrainDecision) -> tuple[Message, Escalation | None]:
+                    customer_message: Message, decision: BrainDecision,
+                    handoffs: str = "inbox") -> tuple[Message, Escalation | None]:
     """Save the bot's reply, then update the conversation state and the owner's inbox (steps 5-6).
 
     Returns the bot message and the escalation this created, if any (an ask_owner that only
-    restates a pending question creates none), so the caller can send one alert per new event."""
+    restates a pending question creates none, and neither does a repeat handoff in "notify" mode),
+    so the caller can send one alert per new event. `handoffs` is the business's setting (D-013)."""
     reason = str(decision.handoff_reason) if decision.handoff_reason else None
     bot_message = add_message(
         session, business, conversation, Role.BOT, decision.reply or "",
@@ -144,20 +148,61 @@ def record_decision(session: Session, business: Business, conversation: Conversa
                 business_id=business.id, conversation_id=conversation.id, message_id=bot_message.id,
                 kind=str(Action.ASK_OWNER), question=decision.question_for_owner, status="pending",
             )
-    elif decision.action is Action.HANDOFF:
-        # The bot stays out of it from now on. Abuse is kept for the record but closed at once:
-        # nobody needs to act on it, and the troll's next messages cost no model call.
-        abuse = decision.handoff_reason is HandoffReason.ABUSE
-        conversation.state = ENDED if abuse else HUMAN_HANDOFF
+    elif decision.action is Action.HANDOFF and decision.handoff_reason is HandoffReason.ABUSE:
+        # Kept for the record but closed at once: nobody needs to act on it, and the troll's next
+        # messages cost no model call.
+        conversation.state = ENDED
         created = Escalation(
             business_id=business.id, conversation_id=conversation.id, message_id=bot_message.id,
             kind=str(Action.HANDOFF), reason=reason, question=one_line(customer_message.text),
-            status="closed" if abuse else "pending", answered_at=utcnow() if abuse else None,
+            status=CLOSED, answered_at=utcnow(),
+        )
+    elif decision.action is Action.HANDOFF and handoffs == "notify":
+        # The team handles it outside Jawab (the shop's email, the phone): the inbox only records
+        # it, and the bot keeps answering. One record per reason per chat, so a customer who keeps
+        # complaining doesn't email the shop again with every message.
+        repeat = session.scalar(
+            select(Escalation.id).where(
+                Escalation.business_id == business.id, Escalation.conversation_id == conversation.id,
+                Escalation.kind == Action.HANDOFF, Escalation.reason == reason,
+            ).limit(1)
+        )
+        if repeat is None:
+            created = Escalation(
+                business_id=business.id, conversation_id=conversation.id, message_id=bot_message.id,
+                kind=str(Action.HANDOFF), reason=reason, question=one_line(customer_message.text),
+                status=NOTIFIED, answered_at=utcnow(),
+            )
+    elif decision.action is Action.HANDOFF:
+        # A person replies in the inbox; the bot stays out of it until it's given back.
+        conversation.state = HUMAN_HANDOFF
+        created = Escalation(
+            business_id=business.id, conversation_id=conversation.id, message_id=bot_message.id,
+            kind=str(Action.HANDOFF), reason=reason, question=one_line(customer_message.text),
+            status="pending",
         )
     if created is not None:
         session.add(created)
     session.flush()
     return bot_message, created
+
+
+def team_handoff(session: Session, business: Business, conversation: Conversation) -> Escalation | None:
+    """The chat's latest complaint or lead: what a contact left in the chat is for."""
+    return session.scalar(
+        select(Escalation)
+        .where(Escalation.business_id == business.id, Escalation.conversation_id == conversation.id,
+               Escalation.kind == Action.HANDOFF, Escalation.reason.in_([str(r) for r in TEAM_REASONS]))
+        .order_by(Escalation.id.desc())
+        .limit(1)
+    )
+
+
+def wants_contact(session: Session, business: Business, conversation: Conversation, settings: dict) -> bool:
+    """Whether the chat should offer "leave your email or WhatsApp number": the business asks for
+    it, the chat has a complaint or lead, and the customer hasn't left either yet."""
+    return bool(settings["ask_contact"] and not (conversation.customer_email or conversation.customer_phone)
+                and team_handoff(session, business, conversation) is not None)
 
 
 def panel_for(decision: BrainDecision, kb: KnowledgeBase) -> dict:

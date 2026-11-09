@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from sqlalchemy import (
-    JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, Uuid, create_engine, event, select,
+    JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, Uuid, create_engine, event, inspect, select, text,
 )
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError
@@ -75,7 +75,8 @@ class Conversation(Base):
     business_id: Mapped[int] = mapped_column(ForeignKey("businesses.id"), nullable=False, index=True)
     state: Mapped[str] = mapped_column(String, nullable=False, default="bot_active")
     language: Mapped[str | None] = mapped_column(String)  # en, el or ar: the customer's, from their messages
-    customer_email: Mapped[str | None] = mapped_column(Text)  # left after an ask_owner, for the answer
+    customer_email: Mapped[str | None] = mapped_column(Text)  # left after an ask_owner (the answer) or a handoff
+    customer_phone: Mapped[str | None] = mapped_column(Text)  # left after a complaint or lead, for the team
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
 
@@ -205,6 +206,11 @@ SEED_BUSINESSES = [
             "reply_to": "theplug.cyprus@gmail.com",
             "alerts": True,
             "email_customers": True,
+            # Nobody but the owner uses the inbox: the manager handles complaints and leads from the
+            # shop's email, so those are emailed and the bot carries on (D-013).
+            "handoffs": "notify",
+            "ask_contact": True,
+            "cc_owner": True,
         },
         "suggestions": [
             "How much for 100 black & white pages?",
@@ -245,8 +251,29 @@ def init_db(engine: Engine, session_factory: sessionmaker[Session], single_busin
     In single-business mode only that business is seeded, and it's never a demo: no reset, and its
     real settings apply. On the public demo, demo seeds get the demo overlay."""
     Base.metadata.create_all(engine)
+    add_missing_columns(engine)
     for seed in seeds_for(single_business):
         seed_business(session_factory, seed, demo=bool(seed.get("demo")) and single_business is None)
+
+
+def add_missing_columns(engine: Engine) -> None:
+    """Add model columns an older database lacks (D-014). create_all() makes missing tables, never
+    missing columns. Only nullable columns without a default are added: an existing row simply gets
+    NULL. Nothing is ever dropped, renamed or changed; anything bigger needs a real migration."""
+    existing_tables = set(inspect(engine).get_table_names())
+    for table in Base.metadata.sorted_tables:
+        if table.name not in existing_tables:
+            continue
+        present = {c["name"] for c in inspect(engine).get_columns(table.name)}
+        for column in table.columns:
+            if column.name in present:
+                continue
+            if not column.nullable or column.default is not None or column.server_default is not None:
+                raise RuntimeError(f"{table.name}.{column.name} is missing and can't be added automatically")
+            kind = column.type.compile(dialect=engine.dialect)
+            with engine.begin() as connection:
+                connection.execute(text(f'ALTER TABLE {table.name} ADD COLUMN {column.name} {kind}'))
+            log.info("added the column %s.%s", table.name, column.name)
 
 
 def seed_business(session_factory: sessionmaker[Session], seed: dict, demo: bool = False) -> None:
