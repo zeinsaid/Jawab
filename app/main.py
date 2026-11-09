@@ -424,7 +424,7 @@ def create_app(engine: Engine, client: LLMClient, limiter: RateLimiter | None = 
                     background.add_task(alerts.handoff, business.name, str(decision.handoff_reason),
                                         decision.reasoning, transcript(session, business, conversation.id),
                                         conversation.customer_email, conversation.customer_phone,
-                                        settings["cc_owner"])
+                                        settings["cc_owner"], settings["ask_contact"])
 
             # Step 7: only customer-safe fields leave the server.
             contacts = biz_settings.pick(settings["contact_line"], conversation.language)

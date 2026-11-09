@@ -116,7 +116,8 @@ def test_complaints_and_leads_email_the_shop(make, reason, subject):
     assert "Summary: The customer wants a refund for a misprinted poster." in email["text"]
     assert "Customer: You ruined my poster, I want my money back" in email["text"]
     assert "Assistant: I'm passing this to the team." in email["text"]
-    assert "Customer's email: not given" in email["text"]
+    assert ("How to reach the customer: not known yet. The chat has asked them for an email or WhatsApp "
+            "number; if they leave one, it follows as a reply in this thread.") in email["text"]
     assert email["reply_to"] is None
 
 
@@ -155,11 +156,13 @@ def test_the_inbox_mode_still_waits_for_a_person(make):
     client, mailer, sessions, headers = make(decision("handoff", "complaint", "Passing you to the team."))
     with sessions() as session:  # a business whose team replies in the inbox
         business = session.scalar(select(Business))
-        business.settings = {**business.settings, "handoffs": "inbox", "cc_owner": False}
+        business.settings = {**business.settings, "handoffs": "inbox", "cc_owner": False, "ask_contact": False}
         session.commit()
     data = say(client, "My order is wrong").json()
     assert data["state"] == "human_handoff"
     assert mailer.sent[0]["cc"] == []
+    # Nobody asks this customer for a contact, so the email doesn't promise one.
+    assert "Customer's email: not given" in mailer.sent[0]["text"]
     with sessions() as session:
         assert session.scalar(select(Escalation)).status == "pending"
     quiet = say(client, "Hello?", data["conversation_id"]).json()

@@ -132,15 +132,21 @@ class Alerts:
         return f"[Jawab – {label}] {_short(customer_text, 70)}".rstrip()
 
     def handoff(self, business_name: str, reason: str, summary: str, transcript: list[tuple[str, str]],
-                customer_email: str | None, customer_phone: str | None = None, cc_owner: bool = False) -> bool:
-        """A complaint or a lead: tell the shop. Other reasons send nothing."""
+                customer_email: str | None, customer_phone: str | None = None, cc_owner: bool = False,
+                asked: bool = False) -> bool:
+        """A complaint or a lead: tell the shop. Other reasons send nothing. `asked`: the chat is
+        asking the customer for a contact (ask_contact), which then follows in this thread."""
         if reason not in ("complaint", "lead"):
             return False
         lines = [f"{who}: {said}" for who, said in transcript]
+        reach = _reach(customer_email, customer_phone)
+        if asked and not (customer_email or customer_phone):
+            reach = ("How to reach the customer: not known yet. The chat has asked them for an email or "
+                     "WhatsApp number; if they leave one, it follows as a reply in this thread.")
         text = (
             f"A customer in {business_name}'s website chat needs a person ({reason}).\n\n"
             f"Summary: {summary}\n\n"
-            + _reach(customer_email, customer_phone)
+            + reach
             + "\n\nThe conversation:\n" + "\n".join(lines) + "\n\n"
             "The customer was shown the shop's phone and WhatsApp numbers."
         )
