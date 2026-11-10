@@ -14,7 +14,8 @@ from app.main import Deployment, create_app, deployment_from_env
 from brain.llm import ScriptedClient
 
 SINGLE = Deployment(mode="single", business="the-plug", name="Jawab – The Plug",
-                    cors_origins=["https://theplug.cy"], cors_origin_regex=r"https://([a-z0-9-]+\.)?theplug\.pages\.dev")
+                    cors_origins=["https://theplug.cy"],
+                    cors_origin_regex=r"https://([a-z0-9-]+-)?theplug\.zeinster2002\.workers\.dev")
 
 
 @pytest.fixture
@@ -110,11 +111,14 @@ def test_settings_are_rewritten_from_the_seed_on_every_start_but_the_kb_is_not()
 
 def test_cors_lets_the_website_ping_health(single):
     client, _ = single
-    for origin in ("https://theplug.cy", "https://abc123.theplug.pages.dev", "https://theplug.pages.dev"):
+    for origin in ("https://theplug.cy", "https://theplug.zeinster2002.workers.dev",
+                   "https://my-branch-theplug.zeinster2002.workers.dev"):
         response = client.get("/health", headers={"Origin": origin})
         assert response.headers.get("access-control-allow-origin") == origin
-    other = client.get("/health", headers={"Origin": "https://evil.example"})
-    assert "access-control-allow-origin" not in other.headers
+    for origin in ("https://evil.example", "https://theplug.zeinster2002.workers.dev.evil.example",
+                   "https://other.zeinster2002.workers.dev"):
+        other = client.get("/health", headers={"Origin": origin})
+        assert "access-control-allow-origin" not in other.headers
 
 
 def test_single_mode_needs_its_business_and_a_real_database(monkeypatch):

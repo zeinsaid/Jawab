@@ -51,7 +51,7 @@ services:
       # The website's pages may ping /health to wake the server (the bubble works without it too).
       - key: JAWAB_CORS_ORIGINS
         value: https://theplug.cy,https://www.theplug.cy
-      - key: JAWAB_CORS_ORIGIN_REGEX # Cloudflare Pages: the project's URL and its preview URLs
-        value: https://([a-z0-9-]+\.)?the-?plug[a-z0-9-]*\.pages\.dev
+      - key: JAWAB_CORS_ORIGIN_REGEX # the website's Cloudflare Workers preview and its branch previews (website D-005)
+        value: https://([a-z0-9-]+-)?theplug\.zeinster2002\.workers\.dev
       - key: JAWAB_LIMIT_PER_DAY # model calls a day, all visitors together (the OpenAI cap is the backstop)
         value: "500"

@@ -48,7 +48,7 @@ We're in Engomi, next to the University of Nicosia, right behind the Mall of Eng
 ### shop-business-enquiries
 **Visibility:** public · **Status:** confirmed
 
-Businesses can get in touch through the enquiry form on the For Businesses page of our website (theplug.cy), or by calling the shop on +357 22 542659.
+Businesses can get in touch through the enquiry form on the For Businesses page of our website (theplug.cy), or by email at theplug.cyprus@gmail.com. Our manager will call them back within one working day.
 
 ### shop-sending-files
 **Visibility:** public · **Status:** confirmed
