@@ -95,7 +95,7 @@ Recipients come from env vars, never from the repo. One email per event, and one
 
 **The website bubble** is a small loader the website hosts itself ([`docs/EMBED.md`](docs/EMBED.md)), so it appears at once even while a free server sleeps. It pings `/health` on page load to wake the server, shows a local greeting in the page's `<html lang>`, and hands the customer's first message to the real chat once it's ready, or shows the offline message after about a minute. The conversation ID lives in the website's own storage, so a returning visitor finds the owner's answer waiting.
 
-**Where the knowledge lives.** Where a business runs for real, **its database is the source of truth** for its live knowledge base: the answers the owner saves go there. `kb/the-plug.md` in this repo is only the seed used on the first start, and the copy in the engine's repo is an evaluation fixture. Nobody keeps the three in sync.
+**Where the knowledge lives.** Where a business runs for real, **its database is the source of truth** for its live knowledge base: the answers the owner saves go there. `kb/the-plug.md` in this repo is only the seed used on the first start, and the copy in the engine's repo is an evaluation fixture. The three seed copies (this one, the engine's, and the website's content copy) are kept identical by hand; the live database can still drift ahead of them as the owner saves answers, and changes to the live KB go through the inbox.
 
 **Hosting.** Both run on Render's free plan, which sleeps after 15 idle minutes and gives 750 free hours a month per workspace, shared by all free services (if they run out, every free service stops until the month ends). Moving a deployment to a paid instance is only a plan change in its blueprint, no code change.
 
