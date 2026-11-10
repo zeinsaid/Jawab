@@ -297,7 +297,7 @@ The per-sheet rates above cover medium, thick, extra-thick (300g), tracing and c
 ### print-large-format
 **Visibility:** public · **Status:** confirmed
 
-We print A2 (42×59.4 cm), A1 (59.5×84.1 cm) and A0 (84.1×118.9 cm), in black & white or colour. Papers: plain (also called normal, 80g), medium (coated 120g), and thick or heavyweight (coated 140g or 180g; 180g is the thickest). Plain paper is only suitable for line work and other low-ink prints such as architectural drawings; images and anything with large solid areas (colour or black & white) need at least medium (120g), because heavy ink soaks plain paper.
+We print A2 (42×59.4 cm), A1 (59.4×84.1 cm) and A0 (84.1×118.9 cm), in black & white or colour. Papers: plain (also called normal, 80g), medium (coated 120g), and thick or heavyweight (coated 140g or 180g; 180g is the thickest). Plain paper is only suitable for line work and other low-ink prints such as architectural drawings; images and anything with large solid areas (colour or black & white) need at least medium (120g), because heavy ink soaks plain paper.
 
 Price per print in €, by number of prints in the job.
 
