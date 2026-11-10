@@ -171,3 +171,14 @@ The Plug: `notify`, `ask_contact` and `cc_owner` on. The demo keeps `inbox` and 
 **Alternatives:** A manual `ALTER TABLE` on Neon before the deploy (easy to forget, and the order matters). Alembic (migration files and a migration step for one added column; worth it once there's a change this can't do).
 
 **Why:** Adding a nullable column is the one schema change that's always safe to do automatically, and it's the common one. It turns "remember to run SQL before you push" into nothing.
+
+## D-015 — The owner edits, adds and downloads knowledge entries directly
+**Date:** 2026-11-10 · **Status:** Accepted
+
+**Context:** The live KB is in the database, and until now the only way to change it was a side effect of answering a question (the learning card's Save / Edit). The Knowledge tab was read-only, so fixing a wrong fact (The Plug's "October 30th Street", which is 28th October Avenue) or a changed price meant waiting for a customer to ask, or editing the database by hand. The schema already had a `manual_edit` change type that nothing used.
+
+**Decision:** The Knowledge tab gets an **Edit** button on every entry (visibility and text; the ID stays), an **Add an entry** form, and **Download the knowledge base** (the live markdown as `{slug}-kb-v{version}.md`). Routes: `PUT /api/owner/{slug}/knowledge/{entry_id}`, `POST /api/owner/{slug}/knowledge`, `GET /api/owner/{slug}/knowledge/export`, all behind the owner key. Saving reuses the learning path's safety: `entry_problems` checks the text, the whole KB must still parse, the save is conditional on `kb_version` (retried once on a clash), and a `kb_changes` row keeps the old and new text (`manual_edit` / `manual_add`). An edit keeps the entry in place; a `placeholder` becomes `confirmed`, other statuses stay. The page sends the text it started from (`base_text`): if the entry changed meanwhile, the save is refused (409) instead of overwriting. New entries go into "Learned from the owner"; a taken ID is refused, not renamed. Entries show "Edited {date}". Reset demo also clears manual changes. The bot picks the change up on its next message (its brain is cached by `kb_version`).
+
+**Alternatives:** Deleting entries (left out: other entries refer to each other by ID, so a deletion can quietly confuse the bot; editing an entry to "we no longer offer this" gives the bot a ready answer instead). Editing the whole KB as one raw markdown box (one typo could break every entry). A table editor for the price tables (much more work for a rare edit; tables are edited as raw `|` rows).
+
+**Why:** Owners need to correct facts and prices when they change, not when a customer happens to ask. Everything risky was already solved by the learning path; this only adds the door. The download keeps offline copies (the seed and the website's copy) in step with the live KB.

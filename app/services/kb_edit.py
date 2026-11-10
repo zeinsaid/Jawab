@@ -15,8 +15,11 @@ _HEADING = re.compile(r"^### (\S+)\s*$")
 _SECTION = re.compile(r"^## Learned from the owner\s*$")
 
 
-def meta_line(visibility: str) -> str:
-    return f"**Visibility:** {visibility} · **Status:** learned"
+STATUSES = ("placeholder", "confirmed", "learned")
+
+
+def meta_line(visibility: str, status: str = "learned") -> str:
+    return f"**Visibility:** {visibility} · **Status:** {status}"
 
 
 def entry_problems(entry_id: str, visibility: str, text: str) -> list[str]:
@@ -67,8 +70,10 @@ def add_entry(markdown: str, entry_id: str, visibility: str, text: str) -> str:
     return "\n".join([*before, "", *block, *([""] + after if after else [])]) + "\n"
 
 
-def update_entry(markdown: str, entry_id: str, visibility: str, text: str) -> tuple[str, str]:
-    """Replace an entry's body and mark it learned. Returns (new markdown, old body text).
+def update_entry(markdown: str, entry_id: str, visibility: str, text: str,
+                 status: str = "learned") -> tuple[str, str]:
+    """Replace an entry's body and set its status (learned by default: a saved answer).
+    Returns (new markdown, old body text).
 
     The body is everything between the meta line and the next heading or '---', as in parse_kb.
     Raises KeyError if the entry isn't there.
@@ -89,5 +94,5 @@ def update_entry(markdown: str, entry_id: str, visibility: str, text: str) -> tu
         end += 1
     old_body = "\n".join(lines[meta + 1:end]).strip()
     tail = lines[end:]
-    new_lines = [*lines[:meta], meta_line(visibility), "", *text.strip().splitlines(), *([""] + tail if tail else [])]
+    new_lines = [*lines[:meta], meta_line(visibility, status), "", *text.strip().splitlines(), *([""] + tail if tail else [])]
     return "\n".join(new_lines) + ("\n" if markdown.endswith("\n") else ""), old_body

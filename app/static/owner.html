@@ -58,6 +58,12 @@
 
       <section id="panel-knowledge" class="tab-panel" role="tabpanel" aria-labelledby="tab-knowledge" hidden>
         <p class="muted intro" id="knowledge-intro">What the assistant knows. Public entries can be told to customers; internal ones guide the assistant but are never shown to them.</p>
+        <div class="kb-toolbar">
+          <button type="button" id="kb-add" class="secondary">Add an entry</button>
+          <button type="button" id="kb-download" class="secondary">Download the knowledge base</button>
+        </div>
+        <div id="kb-add-slot"></div>
+        <p id="knowledge-status" class="form-status" role="status"></p>
         <div id="knowledge"></div>
         <section id="demo-reset" class="demo-reset" aria-labelledby="demo-reset-title" hidden>
           <h2 id="demo-reset-title" class="group-title">Demo</h2>

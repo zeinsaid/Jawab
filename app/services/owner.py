@@ -176,15 +176,17 @@ def knowledge(session: Session, business: Business) -> dict:
     customer question), then the other entries grouped by the `## ` section they sit under."""
     kb = parse_kb(business.kb_markdown)
     origins = learned_origins(session, business)
+    edited = last_manual_changes(session, business)
     learned_ids = [i for i, e in kb.entries.items() if e.status == "learned"]
-    learned_ids.sort(key=lambda i: origins.get(i, {}).get("learned_at") or "", reverse=True)
+    learned_ids.sort(key=lambda i: origins.get(i, {}).get("learned_at") or edited.get(i) or "", reverse=True)
 
     def view(entry_id: str) -> dict:
         e = kb.entries[entry_id]
-        item = {"id": e.id, "visibility": str(e.visibility), "status": e.status, "text": e.text}
+        item = {"id": e.id, "visibility": str(e.visibility), "status": e.status, "text": e.text,
+                "edited_at": edited.get(e.id)}
         if e.status == "learned":
             origin = origins.get(e.id, {})
-            item["learned_at"] = origin.get("learned_at")
+            item["learned_at"] = origin.get("learned_at") or edited.get(e.id)
             item["source_question"] = origin.get("source_question")
         return item
 
@@ -447,8 +449,9 @@ def reset_demo(session: Session, business: Business) -> int:
     kb_markdown = Path(seed["kb_path"]).read_text(encoding="utf-8")
     parse_kb(kb_markdown)  # never save a KB that wouldn't parse
 
-    session.execute(delete(KBChange).where(KBChange.business_id == business.id,
-                                           KBChange.source_escalation_id.is_not(None)))
+    session.execute(delete(KBChange).where(
+        KBChange.business_id == business.id,
+        KBChange.source_escalation_id.is_not(None) | KBChange.change.in_(MANUAL_CHANGES)))
     session.execute(delete(Escalation).where(Escalation.business_id == business.id))
     session.execute(delete(Message).where(Message.business_id == business.id))
     session.execute(delete(Conversation).where(Conversation.business_id == business.id))
@@ -460,6 +463,107 @@ def reset_demo(session: Session, business: Business) -> int:
     session.commit()
     session.refresh(business)
     return business.kb_version
+
+
+# --- Direct edits from the Knowledge tab (D-015) ------------------------------------------------------
+
+MANUAL_EDIT, MANUAL_ADD = "manual_edit", "manual_add"
+MANUAL_CHANGES = (MANUAL_EDIT, MANUAL_ADD)
+
+
+@dataclass
+class EntrySaved:
+    entry_id: str
+    changed: bool  # False when the owner saved it unchanged
+
+
+def _save_kb(session: Session, business: Business, build) -> EntrySaved:
+    """Shared by the direct edits: `build(markdown, kb)` returns (new_markdown, KBChange fields, EntrySaved)
+    or raises NotFound / Conflict / ValueError (a problem to show the owner). A KB that wouldn't parse is
+    never saved, and a save that clashes with another one at the same moment starts again from the new KB."""
+    for _ in range(KB_SAVE_ATTEMPTS):
+        session.refresh(business)
+        version, markdown = business.kb_version, business.kb_markdown
+        new_markdown, change, result = build(markdown, parse_kb(markdown))
+        if new_markdown is None:  # nothing to change
+            return result
+        try:
+            parse_kb(new_markdown)
+        except KBError as e:
+            session.rollback()
+            raise ValueError(f"Nothing was saved: the knowledge base wouldn't be valid ({e}).") from e
+        bumped = session.execute(
+            update(Business)
+            .where(Business.id == business.id, Business.kb_version == version)
+            .values(kb_markdown=new_markdown, kb_version=version + 1)
+            .execution_options(synchronize_session=False)
+        ).rowcount
+        if not bumped:
+            session.rollback()
+            continue
+        session.add(KBChange(business_id=business.id, **change))
+        session.commit()
+        session.refresh(business)
+        return result
+    raise Conflict("The knowledge base was changed at the same moment. Please try again.")
+
+
+def edit_entry(session: Session, business: Business, entry_id: str, visibility: str, text: str,
+               base_text: str | None = None) -> EntrySaved:
+    """The owner rewrites an existing entry in place (same ID, same position). A placeholder becomes
+    confirmed (the owner has now checked it); other entries keep their status. `base_text` is the text
+    the owner started from: if the entry has changed since (say, a saved answer updated it), refuse
+    rather than overwrite that change."""
+    text = text.strip()
+    if problems := kb_edit.entry_problems(entry_id, visibility, text):
+        raise ValueError(" ".join(problems))
+
+    def build(markdown, kb):
+        current = kb.entries.get(entry_id)
+        if current is None:
+            raise NotFound(f"There's no entry {entry_id} any more. Reload the knowledge base.")
+        if base_text is not None and current.text.strip() != base_text.strip():
+            raise Conflict("This entry was changed after you opened it. Reload the knowledge base and edit it again.")
+        status = "confirmed" if current.status == "placeholder" else current.status
+        if current.text.strip() == text and str(current.visibility) == visibility and status == current.status:
+            return None, None, EntrySaved(entry_id, changed=False)
+        new_markdown, old_text = kb_edit.update_entry(markdown, entry_id, visibility, text, status)
+        return new_markdown, {"entry_id": entry_id, "change": MANUAL_EDIT, "old_text": old_text,
+                              "new_text": text}, EntrySaved(entry_id, changed=True)
+
+    return _save_kb(session, business, build)
+
+
+def add_entry(session: Session, business: Business, entry_id: str, visibility: str, text: str) -> EntrySaved:
+    """The owner writes a new entry. It goes into the "Learned from the owner" section, like a saved
+    answer. A taken ID is refused (the owner picks another) rather than renamed behind their back."""
+    text = text.strip()
+    if problems := kb_edit.entry_problems(entry_id, visibility, text):
+        raise ValueError(" ".join(problems))
+
+    def build(markdown, kb):
+        if entry_id in kb.entries:
+            raise Conflict(f"There's already an entry called {entry_id}. Pick another ID, or edit that one.")
+        new_markdown = kb_edit.add_entry(markdown, entry_id, visibility, text)
+        return new_markdown, {"entry_id": entry_id, "change": MANUAL_ADD, "old_text": None,
+                              "new_text": text}, EntrySaved(entry_id, changed=True)
+
+    return _save_kb(session, business, build)
+
+
+def last_manual_changes(session: Session, business: Business) -> dict[str, str]:
+    """When each entry was last edited or added from the Knowledge tab (ISO time), for its label."""
+    rows = session.execute(
+        select(KBChange.entry_id, KBChange.created_at)
+        .where(KBChange.business_id == business.id, KBChange.change.in_(MANUAL_CHANGES))
+        .order_by(KBChange.id)
+    ).all()
+    return {entry_id: _iso(created_at) for entry_id, created_at in rows if entry_id}  # later rows win
+
+
+def export_kb(business: Business) -> tuple[str, str]:
+    """The live knowledge base as a markdown file: (filename, content)."""
+    return f"{business.slug}-kb-v{business.kb_version}.md", business.kb_markdown
 
 
 def _iso(value) -> str | None:

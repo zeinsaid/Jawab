@@ -17,7 +17,7 @@ Built in one day (31 Oct 2026) at the **Founding MENA x Replit Hackathon** in Du
 | For | What they get |
 |---|---|
 | **Customers** | A chat on the shop's website (a one-line script tag adds a chat bubble) that answers prices, hours and services in their language, and cites the shop's own information. The page itself comes in English, Greek or Arabic (right to left), as the business chooses. |
-| **The owner** | An inbox of the questions the bot couldn't answer and the chats it handed to a person. Each answer goes to the customer, rewritten in their language, and comes with a draft knowledge entry: **Save**, **Edit** or **Just this once**. |
+| **The owner** | An inbox of the questions the bot couldn't answer and the chats it handed to a person. Each answer goes to the customer, rewritten in their language, and comes with a draft knowledge entry: **Save**, **Edit** or **Just this once**. The **Knowledge** tab shows everything the bot knows; the owner can edit any entry, add one, or download the whole knowledge base. |
 | **A new business** | `/start`: paste a price list, menu or website text, answer a few short questions, review the drafted knowledge base and publish. The bot is live straight away. |
 
 The loop that makes it different:
@@ -95,7 +95,7 @@ Recipients come from env vars, never from the repo. One email per event, and one
 
 **The website bubble** is a small loader the website hosts itself ([`docs/EMBED.md`](docs/EMBED.md)), so it appears at once even while a free server sleeps. It pings `/health` on page load to wake the server, shows a local greeting in the page's `<html lang>`, and hands the customer's first message to the real chat once it's ready, or shows the offline message after about a minute. The conversation ID lives in the website's own storage, so a returning visitor finds the owner's answer waiting.
 
-**Where the knowledge lives.** Where a business runs for real, **its database is the source of truth** for its live knowledge base: the answers the owner saves go there. `kb/the-plug.md` in this repo is only the seed used on the first start, and the copy in the engine's repo is an evaluation fixture. The three seed copies (this one, the engine's, and the website's content copy) are kept identical by hand; the live database can still drift ahead of them as the owner saves answers, and changes to the live KB go through the inbox.
+**Where the knowledge lives.** Where a business runs for real, **its database is the source of truth** for its live knowledge base: the answers the owner saves go there. `kb/the-plug.md` in this repo is only the seed used on the first start, and the copy in the engine's repo is an evaluation fixture. The three seed copies (this one, the engine's, and the website's content copy) are kept identical by hand; the live database can still drift ahead of them as the owner saves answers or edits entries. The owner changes the live KB in the inbox: by saving answers, or directly in the **Knowledge** tab (edit any entry, add a new one, download the whole KB as a file; D-015).
 
 **Hosting.** Both run on Render's free plan, which sleeps after 15 idle minutes and gives 750 free hours a month per workspace, shared by all free services (if they run out, every free service stops until the month ends). Moving a deployment to a paid instance is only a plan change in its blueprint, no code change.
 

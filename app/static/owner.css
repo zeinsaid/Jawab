@@ -462,3 +462,14 @@ select:disabled { opacity: 0.6; }
 .key-input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 .key-form .muted { margin: 0; }
 .customer-line { margin: 4px 0 8px; }
+
+/* Knowledge: direct edits (D-015) */
+.kb-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.kb-add-form { margin-top: 14px; padding: 14px 16px; background: var(--surface); border: 1px solid var(--accent); border-radius: var(--radius); }
+.kb-add-form .group-title { margin-top: 0; }
+.kb-entry-actions { display: flex; justify-content: flex-end; margin-top: 6px; }
+.small-button { padding: 5px 14px; font-size: 0.82rem; }
+.kb-edit-form { margin-top: 8px; }
+.kb-edit-form textarea { font-family: ui-monospace, Consolas, monospace; font-size: 14px; line-height: 1.45; }
+.badge-edited { background: var(--bg); border: 1px solid var(--border); color: var(--text); }
+#knowledge-status:not(:empty) { margin-top: 12px; }

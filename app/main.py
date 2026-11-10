@@ -149,6 +149,15 @@ class LearnEntry(BaseModel):
     text: str = Field(min_length=1, max_length=4000)
 
 
+class EntryUpdate(BaseModel):
+    """A direct edit from the Knowledge tab. `base_text` is the text the owner started from (D-015)."""
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    visibility: Literal["public", "internal"]
+    text: str = Field(min_length=1, max_length=4000)
+    base_text: str | None = Field(default=None, max_length=20000)
+
+
 class LearnRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -605,6 +614,38 @@ def create_app(engine: Engine, client: LLMClient, limiter: RateLimiter | None = 
     def owner_knowledge(access=Depends(owner_access)) -> dict:
         session, business = access
         return owner.knowledge(session, business)
+
+    # Direct edits from the Knowledge tab (D-015). Same safety as a saved answer: the KB must still
+    # parse, a clash with another save is retried, and every change is kept (old and new text).
+    def kb_errors(call):
+        try:
+            return owner_errors(call)
+        except ValueError as e:
+            raise HTTPException(422, str(e))
+
+    @app.put("/api/owner/{slug}/knowledge/{entry_id}")
+    def owner_edit_entry(entry_id: str, body: EntryUpdate, access=Depends(owner_access)) -> dict:
+        session, business = access
+        saved = kb_errors(lambda: owner.edit_entry(session, business, entry_id, body.visibility, body.text,
+                                                   body.base_text))
+        if saved.changed:
+            log.info("owner edited %s for %s (kb_version %s)", entry_id, business.slug, business.kb_version)
+        return {"ok": True, "entry_id": saved.entry_id, "changed": saved.changed, "kb_version": business.kb_version}
+
+    @app.post("/api/owner/{slug}/knowledge")
+    def owner_add_entry(body: LearnEntry, access=Depends(owner_access)) -> dict:
+        session, business = access
+        saved = kb_errors(lambda: owner.add_entry(session, business, body.id, body.visibility, body.text))
+        log.info("owner added %s for %s (kb_version %s)", saved.entry_id, business.slug, business.kb_version)
+        return {"ok": True, "entry_id": saved.entry_id, "kb_version": business.kb_version}
+
+    @app.get("/api/owner/{slug}/knowledge/export")
+    def owner_export_kb(access=Depends(owner_access)) -> Response:
+        session, business = access
+        filename, markdown = owner.export_kb(business)
+        return Response(markdown, media_type="text/markdown; charset=utf-8",
+                        headers={"Content-Disposition": f'attachment; filename="{filename}"',
+                                 "Cache-Control": "no-store"})
 
     # --- Sandboxes: "Try it as the owner" ------------------------------------------------------
 

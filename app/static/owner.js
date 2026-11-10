@@ -652,23 +652,188 @@ function knowledgeEntry(entry) {
   const summary = el("summary", {},
     el("code", { textContent: entry.id }),
     visibilityBadge(entry.visibility),
-    learned ? badge("learned", `✦ Learned${entry.learned_at ? ` ${formatDate(entry.learned_at)}` : ""}`) : null);
+    learned ? badge("learned", `✦ Learned${entry.learned_at ? ` ${formatDate(entry.learned_at)}` : ""}`) : null,
+    !learned && entry.edited_at ? badge("edited", `Edited ${formatDate(entry.edited_at)}`) : null);
   const node = el("details", { className: `kb-entry ${entry.visibility}${learned ? " learned" : ""}` }, summary);
+  node.dataset.entryId = entry.id;
   if (learned && entry.source_question) {
     node.append(el("p", { className: "kb-origin" }, el("span", { className: "muted", textContent: "From a customer asking: " }),
       textNode(entry.source_question, "origin-question")));
   }
-  node.append(renderEntry(entry.text));
+  const view = renderEntry(entry.text);
+  const editButton = el("button", { type: "button", className: "secondary small-button", textContent: "Edit" });
+  const viewActions = el("div", { className: "kb-entry-actions" }, editButton);
+  const editor = knowledgeEditor(entry, {
+    onClose: () => { editor.node.hidden = true; view.hidden = false; viewActions.hidden = false; editButton.focus(); },
+  });
+  editButton.addEventListener("click", () => {
+    view.hidden = true;
+    viewActions.hidden = true;
+    editor.open();
+  });
+  node.append(view, viewActions, editor.node);
   return node;
 }
+
+// The Edit form inside a Knowledge entry: visibility and text (the ID stays). Saves straight to the
+// live knowledge base (D-015); `base_text` lets the server refuse if the entry changed meanwhile.
+function knowledgeEditor(entry, { onClose }) {
+  const uid = Math.random().toString(36).slice(2);
+  const visibility = el("select", { id: `kbvis-${uid}` },
+    el("option", { value: "public", textContent: "Public: the assistant can tell customers" }),
+    el("option", { value: "internal", textContent: "Internal: guides the assistant, never shown" }));
+  const text = el("textarea", { id: `kbtext-${uid}`, maxLength: 4000, dir: "auto" });
+  const save = el("button", { type: "submit", className: "primary", textContent: "Save" });
+  const cancel = el("button", { type: "button", className: "secondary", textContent: "Cancel" });
+  const status = el("p", { className: "form-status", role: "status" });
+  const form = el("form", { className: "entry-form kb-edit-form", hidden: true },
+    el("div", { className: "field" }, el("label", { htmlFor: visibility.id, textContent: "Visibility" }), visibility),
+    el("div", { className: "field" }, el("label", { htmlFor: text.id, textContent: "Entry text" }), text),
+    el("p", { className: "muted small", textContent: "Plain text. Lines starting with “- ” become a list; table rows start with “|”. No lines starting with # and no lines that are only ---. The assistant uses your change from its next message." }),
+    el("div", { className: "form-actions" }, save, cancel), status);
+
+  const setBusy = (busy) => form.querySelectorAll("button, select, textarea").forEach((n) => (n.disabled = busy));
+  const editor = {
+    node: form,
+    open() {
+      visibility.value = entry.visibility === "internal" ? "internal" : "public";
+      text.value = entry.text;
+      text.rows = Math.min(18, Math.max(5, entry.text.split("\n").length + 1));
+      text.classList.toggle("ar", ARABIC.test(text.value));
+      status.textContent = "";
+      status.classList.remove("error", "working");
+      form.hidden = false;
+      text.focus();
+    },
+  };
+  text.addEventListener("input", () => text.classList.toggle("ar", ARABIC.test(text.value)));
+  cancel.addEventListener("click", onClose);
+  form.addEventListener("keydown", (event) => { if (event.key === "Escape") onClose(); });
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!text.value.trim()) {
+      status.textContent = "Write the entry text first.";
+      status.classList.add("error");
+      return;
+    }
+    setBusy(true);
+    status.classList.remove("error");
+    status.classList.add("working");
+    status.textContent = "Saving to the knowledge base…";
+    try {
+      const result = await api(`/knowledge/${encodeURIComponent(entry.id)}`, {
+        method: "PUT", body: { visibility: visibility.value, text: text.value.trim(), base_text: entry.text },
+      });
+      await loadKnowledge({
+        focusId: entry.id,
+        message: result.changed ? `Saved ✓ ${entry.id} is updated. The assistant uses it from its next message.`
+          : `No changes to ${entry.id}.`,
+      });
+    } catch (error) {
+      if (error.status === 403) return;
+      setBusy(false);
+      status.classList.remove("working");
+      status.classList.add("error");
+      status.textContent = error.message;
+    }
+  });
+  return editor;
+}
+
+// "Add an entry": a new fact without waiting for a customer to ask. It joins the learned entries.
+function addEntryForm() {
+  const uid = Math.random().toString(36).slice(2);
+  const idInput = el("input", { id: `kbid-${uid}`, type: "text", maxLength: 80, spellcheck: false, autocomplete: "off",
+    placeholder: "e.g. holiday-christmas", dir: "ltr" });
+  const visibility = el("select", { id: `kbnvis-${uid}` },
+    el("option", { value: "public", textContent: "Public: the assistant can tell customers" }),
+    el("option", { value: "internal", textContent: "Internal: guides the assistant, never shown" }));
+  const text = el("textarea", { id: `kbntext-${uid}`, rows: 5, maxLength: 4000, dir: "auto",
+    placeholder: "The fact, in English, the way the assistant should know it." });
+  const save = el("button", { type: "submit", className: "primary", textContent: "Add" });
+  const cancel = el("button", { type: "button", className: "secondary", textContent: "Cancel" });
+  const status = el("p", { className: "form-status", role: "status" });
+  const form = el("form", { className: "entry-form kb-add-form" },
+    el("h2", { className: "group-title", textContent: "New entry" }),
+    el("div", { className: "field-row" },
+      el("div", { className: "field" }, el("label", { htmlFor: idInput.id, textContent: "ID" }), idInput),
+      el("div", { className: "field" }, el("label", { htmlFor: visibility.id, textContent: "Visibility" }), visibility)),
+    el("div", { className: "field" }, el("label", { htmlFor: text.id, textContent: "Entry text" }), text),
+    el("p", { className: "muted small", textContent: "The ID is lowercase words joined by hyphens. Plain text; no lines starting with # and no lines that are only ---." }),
+    el("div", { className: "form-actions" }, save, cancel), status);
+
+  const close = () => { form.remove(); $("kb-add").hidden = false; $("kb-add").focus(); };
+  cancel.addEventListener("click", close);
+  form.addEventListener("keydown", (event) => { if (event.key === "Escape") close(); });
+  text.addEventListener("input", () => text.classList.toggle("ar", ARABIC.test(text.value)));
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const draft = { id: idInput.value.trim(), visibility: visibility.value, text: text.value.trim() };
+    const problem = !ENTRY_ID.test(draft.id) ? "The ID must be lowercase words joined by hyphens, like holiday-christmas."
+      : !draft.text ? "Write the entry text first." : "";
+    if (problem) {
+      status.textContent = problem;
+      status.classList.add("error");
+      return;
+    }
+    form.querySelectorAll("button, input, select, textarea").forEach((n) => (n.disabled = true));
+    status.classList.remove("error");
+    status.classList.add("working");
+    status.textContent = "Adding to the knowledge base…";
+    try {
+      const result = await api("/knowledge", { method: "POST", body: draft });
+      form.remove();
+      $("kb-add").hidden = false;
+      await loadKnowledge({ focusId: result.entry_id,
+        message: `Added ✓ ${result.entry_id}. The assistant uses it from its next message.` });
+    } catch (error) {
+      if (error.status === 403) return;
+      form.querySelectorAll("button, input, select, textarea").forEach((n) => (n.disabled = false));
+      status.classList.remove("working");
+      status.classList.add("error");
+      status.textContent = error.message;
+    }
+  });
+  return { node: form, focus: () => idInput.focus() };
+}
+
+$("kb-add").addEventListener("click", () => {
+  const form = addEntryForm();
+  $("kb-add-slot").replaceChildren(form.node);
+  $("kb-add").hidden = true;
+  form.focus();
+});
+
+// "Download the knowledge base": the live KB as a .md file (the key goes in a header, so fetch it
+// and hand the browser a file, rather than linking to the URL).
+$("kb-download").addEventListener("click", async () => {
+  const status = $("knowledge-status");
+  status.classList.remove("error");
+  try {
+    const response = await fetch(`${API}/knowledge/export`, { headers: { "X-Owner-Key": KEY } });
+    if (!response.ok) throw new Error(response.status === 403 ? "Wrong owner key." : "Couldn't download it. Please try again.");
+    const name = /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") || "")?.[1] || `${SLUG}-kb.md`;
+    const url = URL.createObjectURL(await response.blob());
+    const link = el("a", { href: url, download: name });
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    status.textContent = `Downloaded ${name}.`;
+  } catch (error) {
+    status.classList.add("error");
+    status.textContent = error.message;
+  }
+});
 
 function formatDate(iso) {
   const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString([], { day: "numeric", month: "short" });
 }
 
-async function loadKnowledge() {
+async function loadKnowledge({ focusId = null, message = null } = {}) {
   const container = $("knowledge");
+  const status = $("knowledge-status");
   try {
     const data = await api("/knowledge");
     $("knowledge-intro").textContent = `${data.entry_count} entries. Public entries can be told to customers; ` +
@@ -686,6 +851,17 @@ async function loadKnowledge() {
     }
     container.replaceChildren(...groups);
     $("demo-reset").hidden = !data.can_reset_demo;
+    if (message !== null) {
+      status.classList.remove("error");
+      status.textContent = message;
+    }
+    // After a save, open the entry that changed and bring it into view.
+    const focused = focusId && container.querySelector(`[data-entry-id="${CSS.escape(focusId)}"]`);
+    if (focused) {
+      focused.open = true;
+      focused.scrollIntoView({ block: "center", behavior: REDUCED_MOTION.matches ? "auto" : "smooth" });
+      focused.querySelector("summary")?.focus({ preventScroll: true });
+    }
   } catch (error) {
     if (error.status !== 403) container.replaceChildren(el("p", { className: "form-status error", textContent: error.message }));
   }
