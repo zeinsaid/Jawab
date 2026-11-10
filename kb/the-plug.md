@@ -35,7 +35,7 @@ The shop may occasionally close for holidays. If a customer asks whether we're o
 
 Address: Asomatou 9, Egkomi, Lefkosia 2414, Cyprus.
 
-We're in Engomi, next to the University of Nicosia, right behind the Mall of Engomi, just off October 30th Street. We're next to the Serious Black coffee shop, which is also a barber shop called WizArt. Look for the shop with tables outside and a large LED screen out front.
+We're in Engomi, next to the University of Nicosia, right behind the Mall of Engomi, just off 28th October Avenue. We're next to the Serious Black coffee shop, which is also a barber shop called WizArt. Look for the shop with tables outside and a large LED screen out front.
 
 ### shop-contact
 **Visibility:** public · **Status:** confirmed
