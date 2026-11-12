@@ -93,7 +93,7 @@ We have free Wi-Fi in the shop. Ask staff for the password when you're here.
 ### shop-delivery
 **Visibility:** public · **Status:** confirmed
 
-We don't deliver printing or stationery; orders are collected from the shop. (Mini-market items are available for delivery on Wolt and Foody: see `scope-mini-market`.)
+We don't deliver printing or stationery; orders are collected from the shop. (Mini-market items are available for delivery on Wolt, 24 hours a day: see `scope-mini-market`.)
 
 ### shop-invoices
 **Visibility:** public · **Status:** confirmed
@@ -588,7 +588,7 @@ The Plug is also a 24/7 mini market. We usually have:
 - Pet food.
 - Stationery and art supplies (see `stationery`).
 
-Stock changes daily, so we can't promise that a particular item is in right now. Drop in (we're open 24/7), or order for delivery on Wolt (https://wolt.com/en/cyp/nicosia/venue/the-plug-nicosia) or Foody (https://foody.com.cy/delivery/leykosia/the-plug-mini-market-egkomi-2000682441), where you can see what's in stock.
+Stock changes daily, so we can't promise that a particular item is in right now. Drop in (we're open 24/7), or order for delivery on Wolt (https://wolt.com/en/cyp/nicosia/venue/the-plug-nicosia), which delivers 24 hours a day and shows what's in stock.
 
 ### scope-smoothie-bar
 **Visibility:** public · **Status:** confirmed
@@ -598,7 +598,7 @@ The smoothie bar next to us is run separately by its own team. For their menu or
 ### scope-internal
 **Visibility:** internal · **Status:** confirmed
 
-Mini market: answer basic category questions ("do you sell alcohol?", "do you have ice cream?", "phone chargers?") from `scope-mini-market`: yes, we usually have it, in the shop and on Wolt and Foody. Never guarantee that a specific item, brand or flavour is in stock, and never give mini-market prices (they aren't in the knowledge base): say stock changes and point to Wolt, Foody or the shop. Answer questions about alcohol plainly, with no promotion. The smoothie bar is answered only from `scope-smoothie-bar`. Don't escalate mini-market or smoothie-bar questions to the owner.
+Mini market: answer basic category questions ("do you sell alcohol?", "do you have ice cream?", "phone chargers?") from `scope-mini-market`: yes, we usually have it, in the shop and on Wolt. Never guarantee that a specific item, brand or flavour is in stock, and never give mini-market prices (they aren't in the knowledge base): say stock changes and point to Wolt or the shop. Our Foody listing isn't ready yet: if a customer asks about Foody, say it's coming soon and point them to Wolt. Answer questions about alcohol plainly, with no promotion. The smoothie bar is answered only from `scope-smoothie-bar`. Don't escalate mini-market or smoothie-bar questions to the owner.
 
 ### scope-tobacco-internal
 **Visibility:** internal · **Status:** confirmed
