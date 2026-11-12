@@ -43,7 +43,7 @@ from app.db import Escalation, init_db, make_engine, make_session_factory
 from app.limits import RateLimiter
 from app.services import alerts as alerting
 from app.services import conversations as convs
-from app.services import onboarding, owner, sandbox
+from app.services import onboarding, owner, retention, sandbox
 from app.services import settings as biz_settings
 from app.services.businesses import BrainCache, get_business
 from app.services.mail import Mailer, NullMailer, ResendMailer
@@ -219,6 +219,7 @@ def create_app(engine: Engine, client: LLMClient, limiter: RateLimiter | None = 
     session_factory = make_session_factory(engine)
     draft_client = draft_client or client
     init_db(engine, session_factory, deployment.business if deployment.single else None)
+    retention.run_if_due(session_factory)  # old chats go on startup too (the free server sleeps)
     brains = BrainCache(client)
     alerts = alerting.Alerts(mailer or NullMailer(), alert_config or alerting.AlertConfig(deployment.name),
                              session_factory)
@@ -434,6 +435,9 @@ def create_app(engine: Engine, client: LLMClient, limiter: RateLimiter | None = 
                                         decision.reasoning, transcript(session, business, conversation.id),
                                         conversation.customer_email, conversation.customer_phone,
                                         settings["cc_owner"], settings["ask_contact"])
+
+            # Delete chats past the business's retention, at most every few hours (D-016).
+            background.add_task(retention.run_if_due, session_factory)
 
             # Step 7: only customer-safe fields leave the server.
             contacts = biz_settings.pick(settings["contact_line"], conversation.language)

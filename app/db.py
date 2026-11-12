@@ -211,6 +211,8 @@ SEED_BUSINESSES = [
             "handoffs": "notify",
             "ask_contact": True,
             "cc_owner": True,
+            # The website's privacy page promises chats are kept for 6 months (D-016).
+            "retention_days": 180,
         },
         "suggestions": [
             "How much for 100 black & white pages?",

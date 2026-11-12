@@ -47,6 +47,9 @@ DEFAULTS = {
     "handoffs": "inbox",
     "ask_contact": False,  # after a complaint or lead: "leave your email or WhatsApp number"
     "cc_owner": False,  # copy the owner on the shop's complaint and lead emails
+    # Delete a conversation after this many days without activity (app/services/retention.py,
+    # D-016); None keeps conversations.
+    "retention_days": None,
 }
 
 HANDOFF_MODES = ("inbox", "notify")

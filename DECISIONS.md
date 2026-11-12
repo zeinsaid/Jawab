@@ -182,3 +182,15 @@ The Plug: `notify`, `ask_contact` and `cc_owner` on. The demo keeps `inbox` and 
 **Alternatives:** Deleting entries (left out: other entries refer to each other by ID, so a deletion can quietly confuse the bot; editing an entry to "we no longer offer this" gives the bot a ready answer instead). Editing the whole KB as one raw markdown box (one typo could break every entry). A table editor for the price tables (much more work for a rare edit; tables are edited as raw `|` rows).
 
 **Why:** Owners need to correct facts and prices when they change, not when a customer happens to ask. Everything risky was already solved by the learning path; this only adds the door. The download keeps offline copies (the seed and the website's copy) in step with the live KB.
+
+## D-016 — Conversations are deleted after a business's retention period
+**Date:** 2026-11-12 · **Status:** Accepted
+
+**Context:** Nothing ever deleted a real conversation: only demo sandboxes expire (24 h) and "Reset demo" clears the demo. The Plug's new website needs a privacy policy, and the GDPR asks for a stated retention period. The shop's owners chose 6 months, the same as the rule for the website's form emails (one number for the whole site).
+
+**Decision:** A per-business setting, `retention_days` (default `None`: keep). Conversations with no activity (`updated_at`: any message from the customer, the bot or the team) for longer than that are deleted with their messages and escalations, children first (`app/services/retention.py`). The Plug's seed sets **180 days**, a little under 6 months, so chats are never kept longer than its privacy page promises. Render's free plan has no scheduler, so the purge runs at startup (the free server wakes several times a day) and after a chat message at most every 6 hours; an `AppState` row (`retention:last_run`) keeps the throttle across restarts. Learned knowledge stays: saved answers are in the KB, and `kb_changes` only keeps an escalation's ID.
+
+**Alternatives:** A fixed retention for everyone (a public product: other businesses have other rules, and the default must not delete anyone's data unannounced). Deleting by `created_at` (would cut off a long-running chat that's still active). A separate cron job (Render's free plan has none, and a paid cron service for one query isn't worth it). Deleting by hand from the inbox (relies on someone remembering; a policy that depends on memory isn't one).
+
+**Why:** A privacy promise has to be enforced by code, not by habit. Making it a setting keeps it general (the repo's rule: no Plug-only hacks), and using last activity means a conversation goes 180 days after anyone last touched it.
+
