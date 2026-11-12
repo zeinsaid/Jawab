@@ -1,7 +1,8 @@
 """Sending email: Resend's HTTP API, or nothing.
 
-Render's free plan blocks the SMTP ports, so mail goes out over HTTPS. Plain text only: alerts and
-answers are short, and plain text can't render wrong in any mail app.
+Render's free plan blocks the SMTP ports, so mail goes out over HTTPS. Every email has a plain-text
+version; most also have an HTML version (app/services/email_html.py, D-017), which mail apps show
+instead when they can.
 
 A failed send is logged and swallowed: an email is never worth breaking a chat or an answer for.
 """
@@ -19,7 +20,7 @@ RESEND_URL = "https://api.resend.com/emails"
 
 class Mailer(Protocol):
     def send(self, to: list[str], subject: str, text: str, reply_to: str | None = None,
-             cc: list[str] | None = None) -> bool: ...
+             cc: list[str] | None = None, html: str | None = None) -> bool: ...
 
 
 class ResendMailer:
@@ -29,10 +30,12 @@ class ResendMailer:
         self.http = http or httpx.Client(timeout=10)
 
     def send(self, to: list[str], subject: str, text: str, reply_to: str | None = None,
-             cc: list[str] | None = None) -> bool:
+             cc: list[str] | None = None, html: str | None = None) -> bool:
         if not to:
             return False
         payload = {"from": self.sender, "to": to, "subject": subject, "text": text}
+        if html:
+            payload["html"] = html
         if reply_to:
             payload["reply_to"] = reply_to
         if cc:
@@ -55,7 +58,7 @@ class NullMailer:
     """No RESEND_API_KEY: say what would have been sent, send nothing."""
 
     def send(self, to: list[str], subject: str, text: str, reply_to: str | None = None,
-             cc: list[str] | None = None) -> bool:
+             cc: list[str] | None = None, html: str | None = None) -> bool:
         log.info("email not sent (no RESEND_API_KEY): %s", subject)
         return False
 
@@ -67,7 +70,7 @@ class RecordingMailer:
     sent: list[dict] = field(default_factory=list)
 
     def send(self, to: list[str], subject: str, text: str, reply_to: str | None = None,
-             cc: list[str] | None = None) -> bool:
+             cc: list[str] | None = None, html: str | None = None) -> bool:
         self.sent.append({"to": list(to), "subject": subject, "text": text, "reply_to": reply_to,
-                          "cc": list(cc or [])})
+                          "cc": list(cc or []), "html": html})
         return True

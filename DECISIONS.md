@@ -194,3 +194,14 @@ The Plug: `notify`, `ask_contact` and `cc_owner` on. The demo keeps `inbox` and 
 
 **Why:** A privacy promise has to be enforced by code, not by habit. Making it a setting keeps it general (the repo's rule: no Plug-only hacks), and using last activity means a conversation goes 180 days after anyone last touched it.
 
+## D-017 — Every email has an HTML version; the owner is copied on everything sent to the shop
+**Date:** 2026-11-12 · **Status:** Accepted
+
+**Context:** Every email was plain text (mail.py: "plain text can't render wrong"). The Plug's owner found them hard to read: no hierarchy, sometimes one long block. Separately, he set one rule for all his projects: any email from the website or Jawab that goes to the shop or the manager also goes to him.
+
+**Decision:** `Mailer.send` takes an optional `html`; every alert and the answer email now send an HTML version built by `app/services/email_html.py`, and the plain text is unchanged (the existing tests still check it). One generic layout: a dark header with the business's name in its accent colour (white if the accent is too dark to read there, like Jawab's teal), an optional highlighted line, a title, one-tap buttons (answer in the inbox; reply by email, call, WhatsApp the customer), a table of short facts, and boxes for longer text, with a conversation shown as a chat. Arabic emails are right to left. Everything from customers, the model or the owner is escaped. The four business emails get the business's `accent` from its settings. The owner rule needs no new code: complaints, leads and their "Re:" follow-ups already copy the owner when `cc_owner` is on, and The Plug's seed has it on (now covered by a test); questions for the owner and offline alerts already go only to the owner, and the answer email goes to the customer.
+
+**Alternatives:** Plain text only (rejected by the owner: hard to scan; it still goes with every email). A template library such as MJML or React Email (a new dependency and build step for a handful of small emails). Making `cc_owner` always on (a public product: other businesses decide for themselves).
+
+**Why:** Staff act on these emails, so the action (call, reply, answer in the inbox) goes at the top and the facts in a scannable table. Keeping the plain text means no mail app loses anything, and the routing rule stays a per-business setting, as the repo's rules ask.
+

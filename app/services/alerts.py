@@ -9,6 +9,10 @@
 | the model can't be reached | the owner, at most every 6 hours per deployment |
 | the owner answers          | the customer, if they left an email, in their language |
 
+Every email that goes to the shop also goes to the owner when the business sets `cc_owner` (The
+Plug does: Zein's rule, D-017, for every email from the website or Jawab). Each email has a plain-text
+version and an HTML one (app/services/email_html.py), in the business's accent colour.
+
 Only businesses whose settings turn `alerts` / `email_customers` on send the first three and the
 last; the offline alert belongs to the deployment and is always on when OWNER_ALERT_EMAIL is set.
 Recipients come from env vars, never from the repo. These methods run as background tasks after
@@ -24,6 +28,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db import AppState, utcnow
+from app.services.email_html import Block, Email, render
 from app.services.mail import Mailer
 
 log = logging.getLogger("jawab.alerts")
@@ -82,16 +87,22 @@ ANSWER_EMAIL = {
         "subject": "Your question to {name}",
         "body": "Hi,\n\nYou asked {name}:\n“{question}”\n\nOur answer:\n{answer}\n",
         "footer": "You're getting this email because you left your address in our website chat.",
+        "asked": "You asked",
+        "answer": "Our answer",
     },
     "el": {
         "subject": "Η ερώτησή σου στο {name}",
         "body": "Γεια σου,\n\nΡώτησες το {name}:\n“{question}”\n\nΗ απάντησή μας:\n{answer}\n",
         "footer": "Λαμβάνεις αυτό το email επειδή άφησες τη διεύθυνσή σου στη συνομιλία της ιστοσελίδας μας.",
+        "asked": "Ρώτησες",
+        "answer": "Η απάντησή μας",
     },
     "ar": {
         "subject": "سؤالك إلى {name}",
         "body": "مرحباً،\n\nسألتَ {name}:\n«{question}»\n\nإجابتنا:\n{answer}\n",
         "footer": "تصلك هذه الرسالة لأنك تركت بريدك الإلكتروني في دردشة موقعنا.",
+        "asked": "سؤالك",
+        "answer": "إجابتنا",
     },
 }
 
@@ -107,7 +118,7 @@ class Alerts:
         return f"[{self.config.deployment}] {text}"
 
     def ask_owner(self, business_name: str, question: str, language: str | None, customer_text: str,
-                  inbox_url: str) -> bool:
+                  inbox_url: str, accent: str | None = None) -> bool:
         """The bot doesn't know: tell the owner, with a link to the inbox (never the key)."""
         text = (
             f"{business_name}'s assistant doesn't know the answer and is waiting for you.\n\n"
@@ -117,7 +128,17 @@ class Alerts:
             "If the customer is still in the chat they'll see it there; if they left an email, "
             "it's emailed to them too, in their language."
         )
-        return self.mailer.send(self.config.owner, self._subject(f"New question: {_short(question, 70)}"), text)
+        html = render(Email(
+            brand=business_name, kicker="A question for you", title=question, accent=accent,
+            actions=[("Answer in the inbox", inbox_url)],
+            rows=[("Language", LANGUAGE_NAMES.get(language or "en", language or "en"))],
+            blocks=[Block("The customer wrote", customer_text)],
+            footer=["If the customer is still in the chat they'll see your answer there; if they left an email, "
+                    "it's emailed to them too, in their language.", f"Sent by {self.config.deployment}."],
+            preheader=customer_text[:120],
+        ))
+        return self.mailer.send(self.config.owner, self._subject(f"New question: {_short(question, 70)}"), text,
+                                html=html)
 
     def _team(self, cc_owner: bool) -> tuple[list[str], list[str]]:
         """Who a complaint or lead goes to: the shop, with the owner in CC (once, and as the
@@ -133,7 +154,7 @@ class Alerts:
 
     def handoff(self, business_name: str, reason: str, summary: str, transcript: list[tuple[str, str]],
                 customer_email: str | None, customer_phone: str | None = None, cc_owner: bool = False,
-                asked: bool = False) -> bool:
+                asked: bool = False, accent: str | None = None) -> bool:
         """A complaint or a lead: tell the shop. Other reasons send nothing. `asked`: the chat is
         asking the customer for a contact (ask_contact), which then follows in this thread."""
         if reason not in ("complaint", "lead"):
@@ -151,11 +172,23 @@ class Alerts:
             "The customer was shown the shop's phone and WhatsApp numbers."
         )
         latest = next((said for who, said in reversed(transcript) if who == "Customer"), "")
+        waiting = asked and not (customer_email or customer_phone)
+        html = render(Email(
+            brand=business_name, kicker=_label(reason), title="A customer in the website chat needs a person",
+            accent=accent, actions=_actions(customer_email, customer_phone),
+            rows=_reach_rows(customer_email, customer_phone, waiting),
+            blocks=[Block("Summary", summary), Block("The conversation", conversation=transcript)],
+            footer=["The customer was shown the shop's phone and WhatsApp numbers.",
+                    f"Sent by {self.config.deployment}."],
+            preheader=summary[:120],
+        ))
         to, cc = self._team(cc_owner)
-        return self.mailer.send(to, self.handoff_subject(reason, latest), text, reply_to=customer_email, cc=cc)
+        return self.mailer.send(to, self.handoff_subject(reason, latest), text, reply_to=customer_email, cc=cc,
+                                html=html)
 
     def contact_left(self, business_name: str, reason: str, customer_text: str, customer_email: str | None,
-                     customer_phone: str | None, transcript: list[tuple[str, str]], cc_owner: bool = False) -> bool:
+                     customer_phone: str | None, transcript: list[tuple[str, str]], cc_owner: bool = False,
+                     accent: str | None = None) -> bool:
         """The customer left a way to reach them after a complaint or lead was emailed: a reply to
         that email (same subject), so it lands in the same thread."""
         lines = [f"{who}: {said}" for who, said in transcript]
@@ -164,19 +197,35 @@ class Alerts:
             + _reach(customer_email, customer_phone)
             + "\n\nThe conversation so far:\n" + "\n".join(lines) + "\n"
         )
+        html = render(Email(
+            brand=business_name, kicker=_label(reason), title="The customer left a way to reach them",
+            accent=accent, actions=_actions(customer_email, customer_phone),
+            rows=_reach_rows(customer_email, customer_phone, False),
+            blocks=[Block("The conversation so far", conversation=transcript)],
+            footer=[f"Sent by {self.config.deployment}."],
+            preheader="The customer left a way to reach them.",
+        ))
         to, cc = self._team(cc_owner)
         subject = "Re: " + self.handoff_subject(reason, customer_text)
-        return self.mailer.send(to, subject, text, reply_to=customer_email, cc=cc)
+        return self.mailer.send(to, subject, text, reply_to=customer_email, cc=cc, html=html)
 
     def answer_to_customer(self, business_name: str, to: str, language: str | None, question: str,
-                           answer: str, contact_line: str | None, reply_to: str | None) -> bool:
+                           answer: str, contact_line: str | None, reply_to: str | None,
+                           accent: str | None = None) -> bool:
         lang = language if language in ANSWER_EMAIL else "en"
         template = ANSWER_EMAIL[lang]
         text = template["body"].format(name=business_name, question=question, answer=answer)
         if contact_line:
             text += f"\n{contact_line}\n"
         text += f"\n{business_name}\n\n— \n{template['footer']}\n"
-        return self.mailer.send([to], template["subject"].format(name=business_name), text, reply_to=reply_to)
+        subject = template["subject"].format(name=business_name)
+        html = render(Email(
+            brand=business_name, kicker="", title=subject, accent=accent, lang=lang,
+            blocks=[Block(template["asked"], question), Block(template["answer"], answer)],
+            footer=[line for line in (contact_line, template["footer"]) if line],
+            preheader=answer[:120],
+        ))
+        return self.mailer.send([to], subject, text, reply_to=reply_to, html=html)
 
     def offline(self, cause: str, detail: str = "") -> bool:
         """The model can't be reached. At most one email every OFFLINE_EVERY per deployment; the
@@ -199,7 +248,14 @@ class Alerts:
             + f"\nYou'll get at most one of these every {int(OFFLINE_EVERY.total_seconds() // 3600)} hours."
         )
         subject = "Out of OpenAI credit: the chat is offline" if cause == "no_credit" else "The chat is offline"
-        return self.mailer.send(self.config.owner, self._subject(subject), text)
+        html = render(Email(
+            brand=self.config.deployment, kicker="Alert", title=subject,
+            banner="The chat is showing its offline message.",
+            rows=[("Why", CAUSES.get(cause, CAUSES["other"]))] + ([("Details", detail)] if detail else []),
+            footer=[f"You'll get at most one of these every {int(OFFLINE_EVERY.total_seconds() // 3600)} hours."],
+            preheader=CAUSES.get(cause, CAUSES["other"])[:120],
+        ))
+        return self.mailer.send(self.config.owner, self._subject(subject), text, html=html)
 
     def _claim_offline_slot(self) -> bool:
         now = utcnow()
@@ -226,6 +282,36 @@ def _reach(email: str | None, phone: str | None) -> str:
     if email:
         lines.append(f"Customer's email: {email} (reply to this email to write to them)")
     return "\n".join(lines) or "Customer's email: not given"
+
+
+def _label(reason: str) -> str:
+    return {"complaint": "Complaint", "lead": "Lead"}.get(reason, reason.title())
+
+
+def _reach_rows(email: str | None, phone: str | None, waiting: bool) -> list[tuple[str, str]]:
+    """How to reach the customer, as rows of the HTML email."""
+    rows = []
+    if phone:
+        rows.append(("WhatsApp / phone", phone))
+    if email:
+        rows.append(("Email", f"{email} (reply to this email to write to them)"))
+    if not rows:
+        rows.append(("How to reach them",
+                     "Not known yet. The chat has asked for an email or WhatsApp number; if they leave one, "
+                     "it follows as a reply in this thread." if waiting else "Not given"))
+    return rows
+
+
+def _actions(email: str | None, phone: str | None) -> list[tuple[str, str]]:
+    """One-tap buttons: write to the customer, call them, message them on WhatsApp."""
+    actions = []
+    if email:
+        actions.append(("Reply by email", f"mailto:{email}"))
+    digits = "".join(c for c in (phone or "") if c.isdigit())
+    if phone and len(digits) >= 6:
+        actions.append(("Call", "tel:" + ("+" if phone.strip().startswith("+") else "") + digits))
+        actions.append(("WhatsApp", f"https://wa.me/{digits}"))
+    return actions
 
 
 def _short(text: str, limit: int) -> str:

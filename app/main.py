@@ -429,12 +429,12 @@ def create_app(engine: Engine, client: LLMClient, limiter: RateLimiter | None = 
             if created is not None and settings["alerts"]:
                 if decision.action is Action.ASK_OWNER:
                     background.add_task(alerts.ask_owner, business.name, created.question, conversation.language,
-                                        customer_message.text, f"{base_url(request)}/owner/{business.slug}")
+                                        customer_message.text, f"{base_url(request)}/owner/{business.slug}", accent=settings["accent"])
                 elif decision.handoff_reason in convs.TEAM_REASONS:
                     background.add_task(alerts.handoff, business.name, str(decision.handoff_reason),
                                         decision.reasoning, transcript(session, business, conversation.id),
                                         conversation.customer_email, conversation.customer_phone,
-                                        settings["cc_owner"], settings["ask_contact"])
+                                        settings["cc_owner"], settings["ask_contact"], accent=settings["accent"])
 
             # Delete chats past the business's retention, at most every few hours (D-016).
             background.add_task(retention.run_if_due, session_factory)
@@ -525,7 +525,8 @@ def create_app(engine: Engine, client: LLMClient, limiter: RateLimiter | None = 
             if first and settings["alerts"]:
                 background.add_task(alerts.contact_left, business.name, handoff.reason, handoff.question,
                                     conversation.customer_email, conversation.customer_phone,
-                                    transcript(session, business, conversation.id), settings["cc_owner"])
+                                    transcript(session, business, conversation.id), settings["cc_owner"],
+                                    accent=settings["accent"])
         return {"ok": True, "kind": kind}
 
     # --- Owner API ------------------------------------------------------------------------------
@@ -571,7 +572,7 @@ def create_app(engine: Engine, client: LLMClient, limiter: RateLimiter | None = 
             background.add_task(alerts.answer_to_customer, biz_settings.display_name(business), conversation.customer_email,
                                 conversation.language, question, sent,
                                 biz_settings.pick(settings["contact_line"], conversation.language),
-                                settings["reply_to"])
+                                settings["reply_to"], accent=settings["accent"])
         return {"escalation": owner.escalation_view(session, business, result.escalation)}
 
     @app.post("/api/owner/{slug}/escalations/{escalation_id}/reply")
