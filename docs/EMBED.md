@@ -27,6 +27,7 @@ page, just before `</body>`:
 | `data-name` | no | The name in the greeting and header. Use the business's display name, so the greeting doesn't change when the real chat takes over. |
 | `data-languages` | no | The chat's page languages (default `en,el,ar`). |
 | `data-offline-en` / `-el` / `-ar` | no | Shown if the server can't be reached. Use the same text as the business's offline setting. |
+| `data-theme` | no | `light` keeps the bubble and the chat light even in dark mode, for a light-only website. Left out, the chat follows the visitor's device. |
 
 **Why self-hosted:** the bubble appears at once, even while a free Jawab server is asleep (it takes
 about a minute to wake). Because the file is yours, update it when Jawab's `jawab.js` changes.

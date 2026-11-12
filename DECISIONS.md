@@ -205,3 +205,14 @@ The Plug: `notify`, `ask_contact` and `cc_owner` on. The demo keeps `inbox` and 
 
 **Why:** Staff act on these emails, so the action (call, reply, answer in the inbox) goes at the top and the facts in a scannable table. Keeping the plain text means no mail app loses anything, and the routing rule stays a per-business setting, as the repo's rules ask.
 
+
+## D-018 — A website can keep the bubble and the chat light (`data-theme="light"`)
+**Date:** 2026-11-12 · **Status:** Accepted
+
+**Context:** The bubble's panel and the chat page both follow the visitor's dark mode. The Plug's website is light-only on purpose (it tells phones not to darken it: the yellow walls and neon are the design), so on a phone in dark mode the chat opened as a dark window on a light page and looked like a different product. A website's `color-scheme` can't reach the bubble's media queries or the chat iframe, which is a separate document.
+
+**Decision:** An optional loader attribute, `data-theme="light"`. The loader then leaves out its own dark styles and adds `&theme=light` to the chat frame's address; the chat page marks its `<html>` with `data-theme="light"`, and every dark rule (both blocks in `chat.css` and the accent style from `theme.py`) is written as `:root:not([data-theme="light"])`, so it skips that mark. Without the attribute nothing changes: the chat follows the device. Older chat pages ignore the extra parameter, so a website's self-hosted loader can be updated before the server.
+
+**Alternatives:** A per-business setting on the server (the theme belongs to the website the bubble sits on, not to the business: the same business could embed on a dark site). A dark-only option (no one needs it yet). Leaving it to the device (rejected for The Plug: the owners chose one look for the whole site).
+
+**Why:** The hosting website owns its look, so the switch sits where the website sets everything else, on the script tag. Guarding the dark rules with one selector keeps a single source of colours, and a light page can never flash dark because the frame stays hidden until it says it's ready.

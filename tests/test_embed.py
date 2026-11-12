@@ -103,3 +103,19 @@ def test_demo_site_carries_the_bubble(client):
     assert page.status_code == 200
     assert "The Plug" in page.text and "<table>" in page.text
     assert '<script src="/embed.js?b=the-plug" async></script>' in page.text
+
+
+def test_a_light_only_website_keeps_the_bubble_and_the_chat_light(client):
+    # data-theme="light" drops the bubble's dark styles and asks the chat page for its light theme...
+    script = client.get("/jawab.js").text
+    assert 'var THEME = attr("theme") === "light" ? "light" : "auto";' in script
+    assert 'THEME === "light" ? "" : "@media (prefers-color-scheme:dark)' in script
+    assert 'if (THEME === "light") url += "&theme=light";' in script
+    # ...which marks its <html>, and every dark rule (chat.css and the accent style) skips that mark.
+    chat = client.get("/static/chat.js").text
+    assert 'if (PARAMS.get("theme") === "light") document.documentElement.dataset.theme = "light";' in chat
+    css = client.get("/static/chat.css").text
+    blocks = css.split("@media (prefers-color-scheme: dark) {")[1:]
+    assert blocks and all(b.lstrip().startswith(':root:not([data-theme="light"])') for b in blocks)
+    page = client.get("/b/the-plug").text
+    assert '@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--accent:' in page

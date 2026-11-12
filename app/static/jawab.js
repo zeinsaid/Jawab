@@ -6,7 +6,8 @@
  *           data-accent="#F920EB" data-name="The Plug"></script>
  *
  * Optional: data-languages="en,el" (the chat's page languages), data-offline-en / data-offline-el /
- * data-offline-ar (what to show if the chat can't be reached). The page's <html lang> picks the language.
+ * data-offline-ar (what to show if the chat can't be reached), data-theme="light" (no dark mode, for a
+ * website that is light-only). The page's <html lang> picks the language.
  * The Jawab server also serves this file as /embed.js?b=<slug>, with that business's values filled in.
  *
  * How it works: the bubble and a local greeting render straight away, and the page pings /health to
@@ -37,6 +38,8 @@
   var HEX = /^#[0-9a-fA-F]{6}$/;
   var ACCENT = HEX.test(attr("accent")) ? attr("accent") : (HEX.test(DEFAULTS.accent || "") ? DEFAULTS.accent : "#0F766E");
   var NAME = attr("name") || DEFAULTS.name || "";
+  // "light": the bubble and the chat stay light even when the visitor's device is in dark mode.
+  var THEME = attr("theme") === "light" ? "light" : "auto";
   var WAKE_MS = 60000; // how long a first message waits for a sleeping server
   var STORE_KEY = "jawab:" + SLUG + ":conversation";
   var HOST_ID = "jawab-chat-" + SLUG;
@@ -100,8 +103,8 @@
     ":host{all:initial}",
     ".jw{--ac:" + ACCENT + ";--fill:" + TEXT_LIGHT + ";--on-fill:#fff;--bg:#fffdf9;--bubble:#f0ece3;--fg:#1c1b18;",
     "--muted:#6d6a62;--line:#e6e1d6;font-family:\"IBM Plex Sans\",system-ui,-apple-system,\"Segoe UI\",Roboto,sans-serif}",
-    "@media (prefers-color-scheme:dark){.jw{--fill:" + TEXT_DARK + ";--on-fill:#0d0d0d;--bg:#1c1c19;--bubble:#27261f;",
-    "--fg:#edebe4;--muted:#a19d92;--line:#302e29}}",
+    THEME === "light" ? "" : "@media (prefers-color-scheme:dark){.jw{--fill:" + TEXT_DARK +
+      ";--on-fill:#0d0d0d;--bg:#1c1c19;--bubble:#27261f;--fg:#edebe4;--muted:#a19d92;--line:#302e29}}",
     ".jw-btn{position:fixed;right:20px;bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:2147483001;",
     "width:60px;height:60px;margin:0;padding:0;border:0;border-radius:50%;background:var(--ac);color:#fff;",
     "display:flex;align-items:center;justify-content:center;cursor:pointer;",
@@ -267,6 +270,7 @@
       var url = BASE + "/b/" + encodeURIComponent(SLUG) + "?embed=1&lang=" + encodeURIComponent(LANG);
       var conversation = load(STORE_KEY);
       if (conversation) url += "&c=" + encodeURIComponent(conversation);
+      if (THEME === "light") url += "&theme=light";
       return url;
     }
 

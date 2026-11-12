@@ -12,6 +12,9 @@ const SHOW_PANEL = PARAMS.get("panel") === "1";
 const EMBEDDED = PARAMS.get("embed") === "1";
 // ?frame=1: inside the /try page, which has its own Jawab bar.
 const FRAMED = PARAMS.get("frame") === "1";
+// ?theme=light: the bubble of a light-only website (jawab.js data-theme="light"); chat.css then skips
+// dark mode. The frame stays hidden until it says it's ready, so this can't flash.
+if (PARAMS.get("theme") === "light") document.documentElement.dataset.theme = "light";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const PHONE = /^\+?[0-9][0-9 ()./-]{5,23}$/; // with 7 to 15 digits, as the server checks

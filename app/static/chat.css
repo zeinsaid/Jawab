@@ -1,4 +1,5 @@
-/* The customer chat. Colours live in variables so dark mode only has to swap them (spec section 10). */
+/* The customer chat. Colours live in variables so dark mode only has to swap them (spec section 10).
+   ?theme=light (a light-only website's bubble) sets data-theme="light" on <html>: no dark mode. */
 :root {
   --bg: #f7f4ee;
   --surface: #fffdf9;
@@ -27,7 +28,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #141412;
     --surface: #1c1c19;
     --text: #edebe4;
@@ -459,7 +460,7 @@ h3 { font-size: 0.78rem; margin: 18px 0 6px; text-transform: uppercase; letter-s
 .badge-md { font-size: 0.85rem; padding: 3px 12px; }
 :lang(ar) .badge-learned { font-family: var(--font-ar); }
 @media (prefers-color-scheme: dark) {
-  .badge { color: #111; }
+  :root:not([data-theme="light"]) .badge { color: #111; }
 }
 .actions-legend { padding-left: 0; list-style: none; display: grid; gap: 8px; }
 

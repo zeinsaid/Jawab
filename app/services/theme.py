@@ -75,4 +75,5 @@ def accent_style(accent: str | None) -> str:
     v = accent_variables(accent)
     light = ";".join(f"{k}:{val}" for k, val in v["light"].items())
     dark = ";".join(f"{k}:{val}" for k, val in v["dark"].items())
-    return f"<style>:root{{{light}}}@media (prefers-color-scheme: dark){{:root{{{dark}}}}}</style>"
+    return (f"<style>:root{{{light}}}@media (prefers-color-scheme: dark)"
+            f"{{:root:not([data-theme=\"light\"]){{{dark}}}}}</style>")
