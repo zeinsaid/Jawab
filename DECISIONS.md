@@ -216,3 +216,14 @@ The Plug: `notify`, `ask_contact` and `cc_owner` on. The demo keeps `inbox` and 
 **Alternatives:** A per-business setting on the server (the theme belongs to the website the bubble sits on, not to the business: the same business could embed on a dark site). A dark-only option (no one needs it yet). Leaving it to the device (rejected for The Plug: the owners chose one look for the whole site).
 
 **Why:** The hosting website owns its look, so the switch sits where the website sets everything else, on the script tag. Guarding the dark rules with one selector keeps a single source of colours, and a light page can never flash dark because the frame stays hidden until it says it's ready.
+
+## D-019 — Fonts are served by Jawab, not Google Fonts
+**Date:** 2026-11-12 · **Status:** Accepted
+
+**Context:** Every Jawab page, the embedded chat included, loaded IBM Plex Sans and IBM Plex Sans Arabic from Google Fonts. Opening the chat on a business's website therefore sent the visitor's IP address to Google, a third party the website's privacy policy has to name. The Plug's policy says its fonts come from its own site, and a 2022 German court ruling found that loading Google Fonts this way without consent breaches the GDPR.
+
+**Decision:** The fonts are served from `app/static/fonts/` (woff2 from Fontsource 5.3.0, SIL Open Font License, licences kept beside them) through one `fonts.css`, linked by all seven pages instead of Google's three lines. Subsets kept: Plex Sans latin, latin-ext and greek; Plex Sans Arabic arabic and latin; weights 400, 600 and 700 (what the pages used). Each face carries its `unicode-range`, so a browser downloads only the subsets a page needs. A test fails if any page mentions Google Fonts again.
+
+**Alternatives:** Keep Google Fonts and have each embedding website name Google in its privacy policy (pushes a third party onto every customer of a public product). System fonts only (the chat would look different on every device, and Arabic rendering varies a lot). A variable font (one file per family, but larger than the three weights needed).
+
+**Why:** A chat a business embeds should bring no third parties of its own beyond what it needs to work (the model provider). Self-hosting is also faster: no connection to two extra Google servers before the text appears.

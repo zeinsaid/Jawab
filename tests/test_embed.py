@@ -5,6 +5,7 @@ In-memory SQLite and a ScriptedClient: no model is called and the development da
 """
 
 import json
+import pathlib
 import re
 
 import pytest
@@ -119,3 +120,18 @@ def test_a_light_only_website_keeps_the_bubble_and_the_chat_light(client):
     assert blocks and all(b.lstrip().startswith(':root:not([data-theme="light"])') for b in blocks)
     page = client.get("/b/the-plug").text
     assert '@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--accent:' in page
+
+
+def test_fonts_are_served_by_jawab_not_google(client):
+    # A website embedding the chat must not send its visitors to a third party for fonts (D-019).
+    static = pathlib.Path(__file__).resolve().parent.parent / "app" / "static"
+    for page in static.glob("*.html"):
+        text = page.read_text(encoding="utf-8")
+        assert "googleapis" not in text and "gstatic" not in text, page.name
+    assert '<link rel="stylesheet" href="/static/fonts/fonts.css">' in client.get("/b/the-plug").text
+    css = client.get("/static/fonts/fonts.css")
+    assert css.status_code == 200
+    files = re.findall(r"url\(/static/fonts/([\w-]+\.woff2)\)", css.text)
+    assert len(files) == 15  # Plex Sans: latin, latin-ext, greek; Plex Sans Arabic: arabic, latin; 400/600/700
+    for name in files:
+        assert client.get(f"/static/fonts/{name}").status_code == 200
