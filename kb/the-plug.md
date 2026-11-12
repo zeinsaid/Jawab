@@ -95,7 +95,12 @@ We have free Wi-Fi in the shop. Ask staff for the password when you're here.
 ### shop-delivery
 **Visibility:** public · **Status:** confirmed
 
-We don't deliver printing or stationery; orders are collected from the shop. (Mini-market items are available for delivery on Wolt, 24 hours a day: see `scope-mini-market`.)
+We don't usually deliver printing or stationery: orders are collected from the shop, which is open 24/7. For very large orders, delivery can sometimes be arranged: ask us and our manager will discuss it with you. (Mini-market items are available for delivery on Wolt, 24 hours a day: see `scope-mini-market`.)
+
+### shop-delivery-internal
+**Visibility:** internal · **Status:** confirmed
+
+Delivering printing is the manager's decision, case by case, and only for very large orders. Never promise or agree to a delivery, and never name an order size or amount that qualifies (the €100 limit in `policy-large-orders` is not a delivery threshold). If a customer asks for delivery of an everyday or small job, say printing is collected from the shop, which is open 24/7. If they ask about delivering a big order, say it can sometimes be arranged for very large orders and our manager will discuss it, then use `handoff` with reason `lead`.
 
 ### shop-invoices
 **Visibility:** public · **Status:** confirmed
