@@ -776,6 +776,8 @@ function renderSuggestions() {
 // Phones and the bubble: chips wrap onto at most two rows; whole chips that don't fit are hidden
 // (never cut in half, and not reachable by Tab while invisible).
 const COMPACT_CHIPS = window.matchMedia("(max-width: 600px)");
+// Short screens (a phone held sideways): one row, so the conversation keeps some room.
+const SHORT_SCREEN = window.matchMedia("(max-height: 499.98px)");
 function fitChips() {
   const chips = [...suggestionsEl.querySelectorAll(".chip")];
   const compact = (EMBEDDED || COMPACT_CHIPS.matches) && !suggestionsEl.hidden;
@@ -789,7 +791,7 @@ function fitChips() {
     // Relative to the row box: the box itself moves up as it grows (it sits above the input).
     const top = Math.round(chip.getBoundingClientRect().top - suggestionsEl.getBoundingClientRect().top);
     if (!rows.includes(top)) {
-      if (rows.length >= 2) { chip.hidden = true; continue; }
+      if (rows.length >= (SHORT_SCREEN.matches ? 1 : 2)) { chip.hidden = true; continue; }
       rows.push(top);
     }
   }

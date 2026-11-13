@@ -43,7 +43,9 @@
   var WAKE_MS = 60000; // how long a first message waits for a sleeping server
   var STORE_KEY = "jawab:" + SLUG + ":conversation";
   var HOST_ID = "jawab-chat-" + SLUG;
-  var PHONE = "(max-width: 479.98px)";
+  // Phones: narrow, or short (a phone held sideways is wide but only ~390 px tall, where the
+  // side panel was squashed to ~280 px). Both get the full-screen chat.
+  var PHONE = "(max-width: 479.98px), (max-height: 499.98px)";
 
   // The chat page's own wording, so the hand-over to the real chat is seamless.
   var TEXT = {
@@ -115,7 +117,7 @@
     ".jw-btn svg{display:block;width:28px;height:28px;pointer-events:none}",
     ".jw-btn .jw-i-close{display:none}.jw-open .jw-btn .jw-i-chat{display:none}.jw-open .jw-btn .jw-i-close{display:block}",
     ".jw-panel{position:fixed;right:20px;bottom:calc(92px + env(safe-area-inset-bottom,0px));z-index:2147483000;",
-    "width:380px;height:600px;max-width:calc(100vw - 40px);max-height:calc(100vh - 112px);",
+    "width:380px;height:600px;max-width:calc(100vw - 40px);max-height:calc(100vh - 112px);max-height:calc(100dvh - 112px);",
     "border-radius:16px;overflow:hidden;background:var(--bg);color:var(--fg);",
     "box-shadow:0 16px 48px rgba(0,0,0,.25),0 2px 8px rgba(0,0,0,.08);",
     "opacity:0;visibility:hidden;pointer-events:none;transform:translateY(12px) scale(.98);transform-origin:bottom right;",
