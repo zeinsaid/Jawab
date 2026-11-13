@@ -358,7 +358,10 @@
 
     function setOpen(next) {
       open = next;
-      if (open && awake && !frame) loadFrame(); // usually awake by now: the page pinged it on load
+      // Load the real chat on open even if /health hasn't answered: some ad and privacy blockers
+      // block any address containing "health". The chat's own "ready" message is the signal
+      // that counts; until then the local greeting shows.
+      if (open && !frame) loadFrame();
       render();
       if (open) {
         if (frameReady) frame.focus();
@@ -402,7 +405,10 @@
     health(70000).then(function (ok) {
       if (!ok) return;
       awake = true;
-      if (open && !frame) loadFrame();
+      if (!open) return;
+      if (!frame) loadFrame();
+      // Opened while asleep: the frame may hold the host's "waking up" page; reload it once.
+      else if (frameLoadedAsleep && !frameReady) { frameLoadedAsleep = false; frame.src = frameUrl(); }
     });
   }
 

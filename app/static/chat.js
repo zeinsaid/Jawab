@@ -321,6 +321,7 @@ function addWelcome() {
 
 function addCustomer(text) {
   messagesEl.append(el("li", { className: "message customer" }, textNode(text)));
+  if (EMBEDDED && !suggestionsEl.hidden) { suggestionsEl.hidden = true; fitChips(); }
   scrollToEnd();
 }
 
@@ -748,6 +749,7 @@ function resetChat() {
   teamNoteShown = false;
   messagesEl.replaceChildren();
   addWelcome();
+  renderSuggestions(); // a fresh chat gets its conversation starters back
   if (SHOW_PANEL) renderLegend();
   panel.classList.remove("open");
   input.value = "";
@@ -769,7 +771,11 @@ function renderSuggestions() {
     chip.addEventListener("click", () => send(text));
     return chip;
   }));
-  suggestionsEl.hidden = list.length === 0;
+  // In the website bubble the chips are conversation starters: once the customer has written,
+  // they only take space (a phone held sideways has little). "New chat" brings them back.
+  // The demo and the /try page keep them, so an owner can click through several examples.
+  const started = EMBEDDED && messagesEl.querySelector(".message.customer") !== null;
+  suggestionsEl.hidden = list.length === 0 || started;
   fitChips();
 }
 
