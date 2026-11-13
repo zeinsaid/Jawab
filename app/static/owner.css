@@ -472,4 +472,9 @@ select:disabled { opacity: 0.6; }
 .kb-edit-form { margin-top: 8px; }
 .kb-edit-form textarea { font-family: ui-monospace, Consolas, monospace; font-size: 14px; line-height: 1.45; }
 .badge-edited { background: var(--bg); border: 1px solid var(--border); color: var(--text); }
+/* chat.css makes badge text dark in dark mode (right on the coloured badges); this one sits on the page
+   background, so it needs the page's text colour or it reads as an empty dark oval. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .badge-edited { color: var(--text); }
+}
 #knowledge-status:not(:empty) { margin-top: 12px; }
