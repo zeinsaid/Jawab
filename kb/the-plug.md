@@ -306,6 +306,8 @@ The per-sheet rates above cover medium, thick, extra-thick (300g), tracing and c
 
 We print A2 (42×59.4 cm), A1 (59.4×84.1 cm) and A0 (84.1×118.9 cm), in black & white or colour. Papers: plain (also called normal, 80g), medium (coated 120g), and thick or heavyweight (coated 140g or 180g; 180g is the thickest). Plain paper is only suitable for line work and other low-ink prints such as architectural drawings; images and anything with large solid areas (colour or black & white) need at least medium (120g), because heavy ink soaks plain paper.
 
+We also print large format on tracing paper (staff give the price) and on canvas (see `print-canvas`).
+
 Price per print in €, by number of prints in the job.
 
 Black & white:
@@ -569,6 +571,8 @@ We sell stationery and art supplies, including:
 
 We also sell photo frames.
 
+Stationery and art supplies are sold in the shop only: they aren't on Wolt.
+
 ### stationery-internal
 **Visibility:** internal · **Status:** confirmed
 
@@ -595,7 +599,7 @@ The Plug is also a 24/7 mini market. We usually have:
 - Pet food.
 - Stationery and art supplies (see `stationery`).
 
-Stock changes daily, so we can't promise that a particular item is in right now. Drop in (we're open 24/7), or order for delivery on Wolt (https://wolt.com/en/cyp/nicosia/venue/the-plug-nicosia), which delivers 24 hours a day and shows what's in stock.
+Stock changes daily, so we can't promise that a particular item is in right now. Drop in (we're open 24/7), or order for delivery on Wolt (https://wolt.com/en/cyp/nicosia/venue/the-plug-nicosia), which delivers 24 hours a day and shows what's in stock. Stationery and art supplies are in the shop only, not on Wolt.
 
 ### scope-smoothie-bar
 **Visibility:** public · **Status:** confirmed
@@ -605,7 +609,7 @@ The smoothie bar next to us is run separately by its own team. For their menu or
 ### scope-internal
 **Visibility:** internal · **Status:** confirmed
 
-Mini market: answer basic category questions ("do you sell alcohol?", "do you have ice cream?", "phone chargers?") from `scope-mini-market`: yes, we usually have it, in the shop and on Wolt. Never guarantee that a specific item, brand or flavour is in stock, and never give mini-market prices (they aren't in the knowledge base): say stock changes and point to Wolt or the shop. Our Foody listing isn't ready yet: if a customer asks about Foody, say it's coming soon and point them to Wolt. Answer questions about alcohol plainly, with no promotion. The smoothie bar is answered only from `scope-smoothie-bar`. Don't escalate mini-market or smoothie-bar questions to the owner.
+Mini market: answer basic category questions ("do you sell alcohol?", "do you have ice cream?", "phone chargers?") from `scope-mini-market`: yes, we usually have it, in the shop and on Wolt (stationery and art supplies: in the shop only, not on Wolt). Never guarantee that a specific item, brand or flavour is in stock, and never give mini-market prices (they aren't in the knowledge base): say stock changes and point to Wolt or the shop. Our Foody listing isn't ready yet: if a customer asks about Foody, say it's coming soon and point them to Wolt. Answer questions about alcohol plainly, with no promotion. The smoothie bar is answered only from `scope-smoothie-bar`. Don't escalate mini-market or smoothie-bar questions to the owner.
 
 ### scope-tobacco-internal
 **Visibility:** internal · **Status:** confirmed
