@@ -227,3 +227,14 @@ The Plug: `notify`, `ask_contact` and `cc_owner` on. The demo keeps `inbox` and 
 **Alternatives:** Keep Google Fonts and have each embedding website name Google in its privacy policy (pushes a third party onto every customer of a public product). System fonts only (the chat would look different on every device, and Arabic rendering varies a lot). A variable font (one file per family, but larger than the three weights needed).
 
 **Why:** A chat a business embeds should bring no third parties of its own beyond what it needs to work (the model provider). Self-hosting is also faster: no connection to two extra Google servers before the text appears.
+
+## D-020 — The bubble shows the real chat on open, whatever /health says; short screens get the full-screen chat; suggestions are starters only
+**Date:** 2026-11-13 · **Status:** Accepted
+
+**Context:** Three things found in the owner's review of The Plug's website. (1) On his PC the bubble only ever showed the loader's local stand-in (greeting, input, "AI receptionist", no suggestions, no New chat): his ad blocker blocks every address containing "health", and the loader only loaded the real chat once `/health` had answered. Any visitor with a similar blocker got the same until they typed. (2) A phone held sideways (844×390) wasn't treated as a phone (the check was width only), so the chat opened as the desktop side panel squashed to ~280 px, cut off further while the browser bar showed (`100vh`). (3) In the bubble, suggestion chips stayed after the customer's first message and took space a sideways phone doesn't have.
+
+**Decision:** The loader loads the real chat as soon as the bubble opens; the chat's own `jawab:ready` message decides when it takes over, and `/health` is only an early wake-up ping (if it answers later and the frame caught the host's "waking up" page, the frame reloads once). "Phone" is `(max-width: 479.98px), (max-height: 499.98px)`: short screens get the full-screen chat too; on them the chat shows one row of chips and hides the footer note; the side panel's height uses `100dvh`. In the bubble (`embed=1`), chips hide after the customer's first message and come back with New chat; the demo and `/try` keep them, so an owner can click through several examples.
+
+**Alternatives:** Rename `/health` (filter lists match many words; the next one might be blocked too). Keep waiting for `/health` and tell blocker users nothing (the chat looks broken). A separate landscape layout for the side panel (still cramped at 390 px tall). Hide chips everywhere after the first message (the demo is where clicking several is the point).
+
+**Why:** The real chat should depend only on a signal from the chat itself, which no blocker can stop without blocking the chat. "Phone" is a shape, not a width. Suggestions start a conversation; after that the customer's own question matters more than the space they take.
