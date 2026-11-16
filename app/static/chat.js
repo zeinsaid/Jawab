@@ -602,7 +602,27 @@ function setBusy(value) {
   input.disabled = busy;
   sendButton.disabled = busy;
   suggestionsEl.querySelectorAll(".chip").forEach((chip) => (chip.disabled = busy));
-  if (!busy) input.focus({ preventScroll: true });
+  if (!busy) focusInput();
+}
+
+// In the website bubble (?embed=1) the chat takes focus only while the visitor is in it: the
+// bubble (jawab.js) hands focus over when they are, and a chat that loads or a reply that
+// arrives after they've gone back to the page must not pull them away from what they're doing.
+function focusInput() {
+  if (EMBEDDED && !document.hasFocus()) return;
+  input.focus({ preventScroll: true });
+}
+
+if (EMBEDDED) {
+  // The bubble focused this frame: put the cursor in the text box, unless the visitor clicked
+  // somewhere in the chat themselves (say, to select text in a reply).
+  let pointerAt = 0;
+  document.addEventListener("pointerdown", () => { pointerAt = Date.now(); }, true);
+  window.addEventListener("focus", () => {
+    if (!busy && document.activeElement === document.body && Date.now() - pointerAt > 300) {
+      input.focus({ preventScroll: true });
+    }
+  });
 }
 
 function setConversation(id) {

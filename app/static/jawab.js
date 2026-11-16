@@ -322,7 +322,11 @@
       }
       setBusy(false);
       render();
-      if (open) frame.focus();
+      // Only if the visitor is still in the chat: the server can take up to a minute to wake,
+      // and on desktop the panel sits beside the page, so they may be typing in the page by now.
+      // (Focus anywhere inside our shadow root shows up as the host element.)
+      var active = document.activeElement;
+      if (open && (!active || active === host || active === document.body)) frame.focus();
     }
 
     function goOffline() {
