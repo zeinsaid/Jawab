@@ -15,7 +15,7 @@ from brain.llm import ScriptedClient
 
 CHAT = "/api/b/the-plug/chat"
 OWNER = "/api/owner/the-plug"
-NEW_LOCATION = ("Address: Asomatou 9, Egkomi, Lefkosia 2414, Cyprus.\n\n"
+NEW_LOCATION = ("Address: Asomatou 9E, Egkomi, Lefkosia 2414, Cyprus.\n\n"
                 "Just off 28th October Avenue, right behind the Mall of Engomi.")
 
 

@@ -1,6 +1,6 @@
 ---
 business: The Plug Mini Market and Print Shop
-location: Asomatou 9, Egkomi, Lefkosia 2414, Cyprus
+location: Asomatou 9E, Egkomi, Lefkosia 2414, Cyprus
 currency: EUR
 default_language: en
 fallback_reply: Let me check with the team and get back to you. / Θα ελέγξω με την ομάδα και θα σας απαντήσω. / دعني أتحقق من الفريق وأعود إليك.
@@ -33,7 +33,7 @@ The shop may occasionally close for holidays. If a customer asks whether we're o
 ### shop-location
 **Visibility:** public · **Status:** confirmed
 
-Address: Asomatou 9, Egkomi, Lefkosia 2414, Cyprus.
+Address: Asomatou 9E, Egkomi, Lefkosia 2414, Cyprus.
 
 We're in Engomi, next to the University of Nicosia, right behind the Mall of Engomi, just off 28th October Avenue. We're next to the Serious Black coffee shop, which is also a barber shop called WizArt. Look for the shop with tables outside and a large LED screen out front.
 
