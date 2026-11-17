@@ -609,7 +609,7 @@ The smoothie bar next to us is run separately by its own team. For their menu or
 ### scope-internal
 **Visibility:** internal · **Status:** confirmed
 
-Mini market: answer basic category questions ("do you sell alcohol?", "do you have ice cream?", "phone chargers?") from `scope-mini-market`: yes, we usually have it, in the shop and on Wolt (stationery and art supplies: in the shop only, not on Wolt). Never guarantee that a specific item, brand or flavour is in stock, and never give mini-market prices (they aren't in the knowledge base): say stock changes and point to Wolt or the shop. Our Foody listing isn't ready yet: if a customer asks about Foody, say it's coming soon and point them to Wolt. Answer questions about alcohol plainly, with no promotion. The smoothie bar is answered only from `scope-smoothie-bar`. Don't escalate mini-market or smoothie-bar questions to the owner.
+Mini market: answer basic category questions ("do you sell alcohol?", "do you have ice cream?", "phone chargers?") from `scope-mini-market`: yes, we usually have it, in the shop and on Wolt (stationery and art supplies: in the shop only, not on Wolt). Never guarantee that a specific item, brand or flavour is in stock, and never give mini-market prices (they aren't in the knowledge base): say stock changes and point to Wolt or the shop. We don't take orders on Foody: if a customer asks about Foody, say Wolt is the only delivery app we use and point them to it. Answer questions about alcohol plainly, with no promotion. The smoothie bar is answered only from `scope-smoothie-bar`. Don't escalate mini-market or smoothie-bar questions to the owner.
 
 ### scope-tobacco-internal
 **Visibility:** internal · **Status:** confirmed
